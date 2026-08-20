@@ -62,9 +62,7 @@ jobs:
           OUTPUT_PATH="build/artifacts"
           rm -rf "$OUTPUT_PATH"
           mkdir -p "$OUTPUT_PATH"
-          for f in bazel-out/applebin_ios-ios_arm*-opt-ST-*/bin/Telegram/Telegram.ipa; do
-            cp "$f" $OUTPUT_PATH/
-          done
+          cp bazel-bin/Telegram/Swiftgram.ipa "$OUTPUT_PATH/Biogram.ipa"
 
           # collect dsym
           mkdir -p build/DSYMs
@@ -93,8 +91,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: /Users/Shared/telegram-ios/build/artifacts/Telegram.ipa
-          asset_name: Telegram.ipa
+          asset_path: /Users/Shared/telegram-ios/build/artifacts/Biogram.ipa
+	  asset_name: Biogram.ipa
           asset_content_type: application/zip
 
       - name: Upload Release DSYM
