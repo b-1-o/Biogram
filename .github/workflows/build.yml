@@ -85,14 +85,14 @@ jobs:
           prerelease: false
 
       - name: Upload Release IPA
-        id: upload-release-ipa 
+        id: upload-release-ipa
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: /Users/Shared/telegram-ios/build/artifacts/Biogram.ipa
-	  asset_name: Biogram.ipa
+          asset_name: Biogram.ipa
           asset_content_type: application/zip
 
       - name: Upload Release DSYM
