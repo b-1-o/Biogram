@@ -3,63 +3,82 @@ name: CI
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: macos-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 0
 
       - name: Set active Xcode path
+        shell: bash
         run: |
-          XCODE_VERSION=$(cat versions.json | python3 -c 'import json,sys;obj=json.load(sys.stdin);print(obj["xcode"]);')
-          echo "Requested Xcode: $XCODE_VERSION"
+          set -e
 
-          if [ -d "/Applications/Xcode_$XCODE_VERSION.app/Contents/Developer" ]; then
-            sudo xcode-select -s "/Applications/Xcode_$XCODE_VERSION.app/Contents/Developer"
+          XCODE_VERSION=$(python3 -c 'import json; print(json.load(open("versions.json"))["xcode"])')
+
+          echo "Required Xcode: $XCODE_VERSION"
+
+          if [ -d "/Applications/Xcode_${XCODE_VERSION}.app" ]; then
+            sudo xcode-select -s "/Applications/Xcode_${XCODE_VERSION}.app/Contents/Developer"
           else
-            echo "Requested Xcode not found, using default Xcode"
+            echo "ERROR: Xcode_${XCODE_VERSION}.app was not found"
+            echo "Available Xcode versions:"
+            ls -1 /Applications/ | grep Xcode || true
+            exit 1
           fi
 
           xcodebuild -version
-          xcode-select -p
 
       - name: Create canonical source directory
+        shell: bash
         run: |
+          set -e
           set -x
 
-          sudo rm -rf /Users/Shared/telegram-ios
           sudo mkdir -p /Users/Shared
 
-          cp -R "$GITHUB_WORKSPACE" /Users/Shared/telegram-ios
+          cp -R "$GITHUB_WORKSPACE" /Users/Shared/
 
-      - name: Build the App
+          mv "/Users/Shared/$(basename "$GITHUB_WORKSPACE")" \
+             /Users/Shared/telegram-ios
+
+      - name: Build Biogram
+        shell: bash
         run: |
-          set -euxo pipefail
+          set -e
+          set -x
 
           SOURCE_DIR=/Users/Shared/telegram-ios
+
           BAZEL_USER_ROOT="/private/var/tmp/_bazel_containerhost"
 
           cd "$SOURCE_DIR"
 
           BUILD_NUMBER_OFFSET="$(cat build_number_offset)"
 
-          export APP_VERSION=$(cat versions.json | python3 -c 'import json,sys;obj=json.load(sys.stdin);print(obj["app"]);')
-          export COMMIT_COUNT=$(git rev-list --count HEAD)
+          export APP_VERSION=$(python3 -c 'import json; print(json.load(open("versions.json"))["app"])')
+
+          export COMMIT_COUNT="$(git rev-list --count HEAD)"
           export COMMIT_COUNT="$((COMMIT_COUNT + BUILD_NUMBER_OFFSET))"
+
           export BUILD_NUMBER="$COMMIT_COUNT"
 
           echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
           echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
 
-          echo "================================"
+          echo "========================================"
           echo "Biogram build"
-          echo "Version: $APP_VERSION"
-          echo "Build:   $BUILD_NUMBER"
-          echo "================================"
+          echo "APP_VERSION=$APP_VERSION"
+          echo "BUILD_NUMBER=$BUILD_NUMBER"
+          echo "========================================"
 
           python3 build-system/Make/ImportCertificates.py \
             --path build-system/fake-codesigning/certs
@@ -72,70 +91,104 @@ jobs:
             --configuration=release_arm64 \
             --buildNumber="$BUILD_NUMBER"
 
-      - name: Collect IPA and dSYM
+      # IMPORTANT:
+      # IPA is copied immediately after the successful build.
+      # Nothing related to DSYM can make the IPA step fail.
+      - name: Collect IPA
+        shell: bash
         run: |
-          set -euxo pipefail
+          set -e
 
-          cd /Users/Shared/telegram-ios
+          SOURCE_DIR=/Users/Shared/telegram-ios
 
-          OUTPUT_PATH="build/artifacts"
+          cd "$SOURCE_DIR"
 
-          rm -rf "$OUTPUT_PATH"
-          mkdir -p "$OUTPUT_PATH"
+          mkdir -p build/artifacts
 
-          echo "================================"
-          echo "Looking for IPA"
-          echo "================================"
+          IPA_PATH="bazel-bin/Telegram/Swiftgram.ipa"
 
-          IPA_PATH=$(find bazel-bin bazel-out -type f -name "Swiftgram.ipa" -print -quit 2>/dev/null || true)
+          echo "Looking for IPA:"
+          ls -lh "$IPA_PATH"
 
-          if [ -z "$IPA_PATH" ]; then
-            echo "ERROR: Swiftgram.ipa not found"
-            find bazel-bin -maxdepth 4 -type f | head -100 || true
+          if [ ! -f "$IPA_PATH" ]; then
+            echo "ERROR: IPA was not found!"
             exit 1
           fi
 
-          echo "Found IPA:"
-          echo "$IPA_PATH"
+          cp "$IPA_PATH" "build/artifacts/Biogram.ipa"
 
-          cp "$IPA_PATH" "$OUTPUT_PATH/Biogram.ipa"
+          echo "========================================"
+          echo "IPA successfully collected:"
+          ls -lh build/artifacts/Biogram.ipa
+          echo "========================================"
 
-          echo "================================"
-          echo "Looking for dSYM files"
-          echo "================================"
+      # DSYM is OPTIONAL.
+      # If something goes wrong here, the build continues.
+      - name: Collect DSYMs
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -x
 
-          rm -rf build/DSYMs
+          SOURCE_DIR=/Users/Shared/telegram-ios
+
+          cd "$SOURCE_DIR"
+
           mkdir -p build/DSYMs
 
-          DSYM_COUNT=0
+          echo "Searching for dSYM files..."
 
-          while IFS= read -r -d '' DSYM; do
-            echo "Found dSYM: $DSYM"
-            cp -R "$DSYM" build/DSYMs/
-            DSYM_COUNT=$((DSYM_COUNT + 1))
-          done < <(find bazel-bin bazel-out -type d -name "*.dSYM" -print0 2>/dev/null || true)
+          find bazel-bin bazel-out \
+            -type d \
+            -name "*.dSYM" \
+            -print \
+            2>/dev/null || true
 
-          echo "Found $DSYM_COUNT dSYM bundle(s)"
+          find bazel-bin bazel-out \
+            -type d \
+            -name "*.dSYM" \
+            -exec cp -R "{}" build/DSYMs/ \; \
+            2>/dev/null || true
 
-          if [ "$DSYM_COUNT" -gt 0 ]; then
+          if find build/DSYMs -type d -name "*.dSYM" | grep -q .; then
+            echo "Creating DSYM archive..."
+
             cd build
-            zip -r "../$OUTPUT_PATH/Telegram.DSYMs.zip" DSYMs >/dev/null
-            cd ..
+
+            zip -r \
+              "artifacts/Telegram.DSYMs.zip" \
+              DSYMs \
+              >/dev/null
+
+            echo "DSYM archive created:"
+            ls -lh artifacts/Telegram.DSYMs.zip
           else
-            echo "WARNING: No dSYM files found"
-            echo "Creating empty dSYM archive so the workflow can continue"
-
-            cd build
-            zip -r "../$OUTPUT_PATH/Telegram.DSYMs.zip" DSYMs >/dev/null
-            cd ..
+            echo "No DSYM files found."
+            echo "This is NOT a build failure."
           fi
 
-          echo "================================"
-          echo "Artifacts"
-          echo "================================"
+      - name: Verify IPA
+        shell: bash
+        run: |
+          set -e
 
-          ls -lh "$OUTPUT_PATH"
+          SOURCE_DIR=/Users/Shared/telegram-ios
 
+          if [ ! -f "$SOURCE_DIR/build/artifacts/Biogram.ipa" ]; then
+            echo "ERROR: Biogram.ipa does not exist."
+            exit 1
+          fi
+
+          echo "IPA:"
+          ls -lh "$SOURCE_DIR/build/artifacts/Biogram.ipa"
+
+          echo ""
+          echo "IPA file type:"
+          file "$SOURCE_DIR/build/artifacts/Biogram.ipa"
+
+      # This is an additional safety net.
+      # Even if the Release creation fails, the IPA remains available
+      # in the workflow artifacts.
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
@@ -144,27 +197,30 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Upload dSYM artifact
+      - name: Upload DSYM artifact
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
-          name: Biogram-dSYMs
+          name: Biogram-DSYMs
           path: /Users/Shared/telegram-ios/build/artifacts/Telegram.DSYMs.zip
-          if-no-files-found: error
+          if-no-files-found: ignore
           retention-days: 7
 
-      - name: Create Release
+      - name: Create GitHub Release
         id: create_release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: build-${{ env.BUILD_NUMBER }}
-          name: Biogram ${{ env.APP_VERSION }} (${{ env.BUILD_NUMBER }})
+          tag_name: "build-${{ env.BUILD_NUMBER }}"
+          name: "Biogram ${{ env.APP_VERSION }} (${{ env.BUILD_NUMBER }})"
           body: |
             Biogram iOS build
 
             Version: ${{ env.APP_VERSION }}
             Build: ${{ env.BUILD_NUMBER }}
 
-            Unsigned build for iOS.
+            Unsigned iOS IPA generated by GitHub Actions.
+          draft: false
+          prerelease: false
           files: |
             /Users/Shared/telegram-ios/build/artifacts/Biogram.ipa
             /Users/Shared/telegram-ios/build/artifacts/Telegram.DSYMs.zip
