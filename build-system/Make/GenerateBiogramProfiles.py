@@ -7,7 +7,7 @@ import shutil
 SOURCE = "build-system/fake-codesigning/profiles"
 DEST = "build-system/fake-codesigning/biogram-profiles"
 
-TEAM_ID = "FAKE123456"
+TEAM_ID = "C67CF9S4VU"
 BUNDLE_ID = "org.28d7790dd5d2e37c.Swiftgram"
 
 os.makedirs(DEST, exist_ok=True)
