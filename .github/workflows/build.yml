@@ -1,502 +1,109 @@
-name: Build Biogram
+name: CI
 
 on:
-  workflow_dispatch:
+  # push:
+  #   branches: [ master ]
 
-permissions:
-  contents: write
+  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-13
 
     steps:
-
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v2
         with:
-          submodules: recursive
-          fetch-depth: 0
+          submodules: 'recursive'
+          fetch-depth: '0'
 
-      - name: Select Xcode
-        shell: bash
+      - name: Set active Xcode path
         run: |
-          set -e
-
-          XCODE_VERSION=$(python3 -c 'import json; print(json.load(open("versions.json"))["xcode"])')
-
-          echo "Required Xcode: $XCODE_VERSION"
-
-          if [ -d "/Applications/Xcode_${XCODE_VERSION}.app" ]; then
-            sudo xcode-select -s "/Applications/Xcode_${XCODE_VERSION}.app/Contents/Developer"
-          else
-            echo "ERROR: Xcode_${XCODE_VERSION}.app was not found"
-            echo "Available Xcode versions:"
-            ls -1 /Applications/ | grep Xcode || true
-            exit 1
-          fi
-
-          xcodebuild -version
+          XCODE_VERSION=$(cat versions.json | python3 -c 'import json,sys;obj=json.load(sys.stdin);print(obj["xcode"]);')
+          sudo xcode-select -s /Applications/Xcode_$XCODE_VERSION.app/Contents/Developer
 
       - name: Create canonical source directory
-        shell: bash
         run: |
-          set -e
-
+          set -x
           sudo mkdir -p /Users/Shared
+          cp -R $GITHUB_WORKSPACE /Users/Shared/
+          mv /Users/Shared/$(basename $GITHUB_WORKSPACE) /Users/Shared/telegram-ios
 
-          rm -rf /Users/Shared/telegram-ios
-
-          cp -R "$GITHUB_WORKSPACE" /Users/Shared/telegram-ios
-
-          echo "Source directory:"
-          ls -la /Users/Shared/telegram-ios
-
-      - name: Prepare build configuration
-        shell: bash
-        env:
-          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+      - name: Build the App
         run: |
-          set -e
-
-          SOURCE_DIR=/Users/Shared/telegram-ios
-
-          cd "$SOURCE_DIR"
-
-          if [ -z "$TELEGRAM_API_HASH" ]; then
-            echo "ERROR: TELEGRAM_API_HASH GitHub Secret is empty or missing."
-            exit 1
-          fi
-
-          CONFIG="build-system/appstore-configuration.json"
-
-          python3 - <<'PY'
-          import json
-          import os
-
-          path = "build-system/appstore-configuration.json"
-
-          with open(path, "r", encoding="utf-8") as f:
-              config = json.load(f)
-
-          config["api_hash"] = os.environ["TELEGRAM_API_HASH"]
-
-          config["bundle_id"] = "org.28d7790dd5d2e37c.Swiftgram"
-
-          # Fake-codesigning profiles use the repository's
-          # fake Team ID for profile matching.
-          config["team_id"] = "C67CF9S4VU"
-
-          config["is_internal_build"] = "true"
-          config["is_appstore_build"] = "false"
-          config["appstore_id"] = "0"
-          config["app_center_id"] = "0"
-
-          with open(path, "w", encoding="utf-8") as f:
-              json.dump(config, f, indent=4)
-              f.write("\n")
-
-          print("Build configuration prepared.")
-          print("bundle_id:", config["bundle_id"])
-          print("team_id:", config["team_id"])
-          print("api_hash: injected from GitHub Secret")
-          PY
-
-      - name: Prepare Biogram fake provisioning profiles
-        shell: bash
-        run: |
-          set -e
-
-          SOURCE_DIR=/Users/Shared/telegram-ios
-
-          cd "$SOURCE_DIR"
-
-          echo "========================================"
-          echo "Preparing fake provisioning profiles"
-          echo "========================================"
-
-          mkdir -p build-system/fake-codesigning/biogram-profiles
-
-          python3 - <<'PY'
-          import os
-          import plistlib
-          import subprocess
-          import tempfile
-
-          source_dir = "build-system/fake-codesigning/profiles"
-          output_dir = "build-system/fake-codesigning/biogram-profiles"
-          p12 = "build-system/fake-codesigning/certs/SelfSigned.p12"
-
-          team_id = "C67CF9S4VU"
-          bundle_id = "org.28d7790dd5d2e37c.Swiftgram"
-
-          mapping = {
-              "Telegram.mobileprovision": "",
-              "NotificationService.mobileprovision": ".NotificationService",
-              "NotificationContent.mobileprovision": ".NotificationContent",
-              "Share.mobileprovision": ".Share",
-              "Intents.mobileprovision": ".SiriIntents",
-              "Widget.mobileprovision": ".Widget",
-              "BroadcastUpload.mobileprovision": ".BroadcastUpload",
-              "WatchApp.mobileprovision": ".watchkitapp",
-              "WatchExtension.mobileprovision": ".watchkitapp.watchkitextension"
-          }
-
-          if not os.path.exists(p12):
-              raise SystemExit("SelfSigned.p12 not found")
-
-          def run(command, input_data=None):
-              result = subprocess.run(
-                  command,
-                  input=input_data,
-                  stdout=subprocess.PIPE,
-                  stderr=subprocess.PIPE,
-                  check=True
-              )
-              return result.stdout
-
-          def decode_profile(path):
-              data = run([
-                  "openssl",
-                  "smime",
-                  "-inform",
-                  "der",
-                  "-verify",
-                  "-noverify",
-                  "-in",
-                  path
-              ])
-              return plistlib.loads(data)
-
-          def get_identity():
-              pem = run([
-                  "openssl",
-                  "pkcs12",
-                  "-in",
-                  p12,
-                  "-passin",
-                  "pass:",
-                  "-nokeys",
-                  "-legacy"
-              ])
-
-              subject = run([
-                  "openssl",
-                  "x509",
-                  "-noout",
-                  "-subject",
-                  "-nameopt",
-                  "oneline,-esc_msb"
-              ], pem).decode().strip()
-
-              marker = "CN = "
-
-              if marker not in subject:
-                  raise RuntimeError(
-                      "Could not determine signing identity: " + subject
-                  )
-
-              return subject.split(marker, 1)[1].split(",", 1)[0].strip()
-
-          identity = get_identity()
-
-          print("Signing identity:", identity)
-
-          keychain = os.path.abspath(
-              "biogram-profile-temp.keychain-db"
-          )
-
-          password = "biogram-temp-password"
-
-          subprocess.run(
-              ["security", "delete-keychain", keychain],
-              stdout=subprocess.DEVNULL,
-              stderr=subprocess.DEVNULL
-          )
-
-          run([
-              "security",
-              "create-keychain",
-              "-p",
-              password,
-              keychain
-          ])
-
-          run([
-              "security",
-              "unlock-keychain",
-              "-p",
-              password,
-              keychain
-          ])
-
-          run([
-              "security",
-              "import",
-              p12,
-              "-k",
-              keychain,
-              "-P",
-              "",
-              "-T",
-              "/usr/bin/security",
-              "-T",
-              "/usr/bin/codesign"
-          ])
-
-          run([
-              "security",
-              "set-key-partition-list",
-              "-S",
-              "apple-tool:,apple:",
-              "-k",
-              password,
-              keychain
-          ])
-
-          try:
-
-              for filename, suffix in mapping.items():
-
-                  source = os.path.join(source_dir, filename)
-                  output = os.path.join(output_dir, filename)
-
-                  if not os.path.exists(source):
-                      raise RuntimeError(
-                          "Missing provisioning profile: " + source
-                      )
-
-                  profile = decode_profile(source)
-
-                  entitlements = profile["Entitlements"]
-
-                  new_identifier = (
-                      team_id + "." + bundle_id + suffix
-                  )
-
-                  entitlements["application-identifier"] = new_identifier
-                  entitlements["com.apple.developer.team-identifier"] = team_id
-
-                  if suffix == "":
-                      entitlements["aps-environment"] = "production"
-
-                  profile["Entitlements"] = entitlements
-
-                  profile.pop("DER-Encoded-Profile", None)
-
-                  fd, plist_path = tempfile.mkstemp(
-                      suffix=".plist"
-                  )
-
-                  os.close(fd)
-
-                  try:
-
-                      with open(plist_path, "wb") as f:
-                          plistlib.dump(profile, f)
-
-                      run([
-                          "security",
-                          "cms",
-                          "-S",
-                          "-k",
-                          keychain,
-                          "-N",
-                          identity,
-                          "-i",
-                          plist_path,
-                          "-o",
-                          output
-                      ])
-
-                  finally:
-
-                      if os.path.exists(plist_path):
-                          os.remove(plist_path)
-
-                  print(
-                      "Created:",
-                      filename,
-                      "=>",
-                      new_identifier
-                  )
-
-          finally:
-
-              subprocess.run(
-                  ["security", "delete-keychain", keychain],
-                  stdout=subprocess.DEVNULL,
-                  stderr=subprocess.DEVNULL
-              )
-
-          print("Fake Biogram profiles generated.")
-          PY
-
-          echo ""
-          echo "Generated profiles:"
-          ls -lh build-system/fake-codesigning/biogram-profiles
-
-      - name: Verify Biogram provisioning profiles
-        shell: bash
-        run: |
-          set -e
-
-          SOURCE_DIR=/Users/Shared/telegram-ios
-
-          cd "$SOURCE_DIR"
-
-          for PROFILE in build-system/fake-codesigning/biogram-profiles/*.mobileprovision
-          do
-            echo ""
-            echo "========================================"
-            echo "PROFILE: $PROFILE"
-            echo "========================================"
-
-            security cms -D \
-              -i "$PROFILE" \
-              -o /tmp/profile.plist
-
-            echo "Bundle identifier:"
-
-            /usr/libexec/PlistBuddy \
-              -c "Print :Entitlements:application-identifier" \
-              /tmp/profile.plist
-
-            echo "APS environment:"
-
-            /usr/libexec/PlistBuddy \
-              -c "Print :Entitlements:aps-environment" \
-              /tmp/profile.plist || true
-          done
-
-      - name: Replace fake provisioning profiles
-        shell: bash
-        run: |
-          set -e
-
-          SOURCE_DIR=/Users/Shared/telegram-ios
-
-          cd "$SOURCE_DIR"
-
-          rm -rf build-system/fake-codesigning/profiles
-
-          mkdir -p build-system/fake-codesigning/profiles
-
-          cp \
-            build-system/fake-codesigning/biogram-profiles/*.mobileprovision \
-            build-system/fake-codesigning/profiles/
-
-          echo "Active profiles:"
-          ls -lh build-system/fake-codesigning/profiles
-
-      - name: Build Biogram
-        shell: bash
-        run: |
-          set -e
           set -x
 
+          # source code paths are included in the final binary, so we need to make them stable across builds
           SOURCE_DIR=/Users/Shared/telegram-ios
+
+          # use canonical bazel root
           BAZEL_USER_ROOT="/private/var/tmp/_bazel_containerhost"
 
-          cd "$SOURCE_DIR"
+          cd $SOURCE_DIR
 
           BUILD_NUMBER_OFFSET="$(cat build_number_offset)"
 
-          export APP_VERSION="$(
-            python3 -c \
-            'import json; print(json.load(open("versions.json"))["app"])'
-          )"
-
-          COMMIT_COUNT=$((COMMIT_COUNT + BUILD_NUMBER_OFFSET))
-              COMMIT_COUNT + BUILD_NUMBER_OFFSET
-            )
-          )"
-
+          export APP_VERSION=$(cat versions.json | python3 -c 'import json,sys;obj=json.load(sys.stdin);print(obj["app"]);')
+          export COMMIT_COUNT=$(git rev-list --count HEAD)
+          export COMMIT_COUNT="$(($COMMIT_COUNT+$BUILD_NUMBER_OFFSET))"
           export BUILD_NUMBER="$COMMIT_COUNT"
+          echo "BUILD_NUMBER=$(echo $BUILD_NUMBER)" >> $GITHUB_ENV
+          echo "APP_VERSION=$(echo $APP_VERSION)" >> $GITHUB_ENV
 
-          echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
-          echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
-
-          echo "========================================"
-          echo "Biogram build"
-          echo "APP_VERSION=$APP_VERSION"
-          echo "BUILD_NUMBER=$BUILD_NUMBER"
-          echo "========================================"
-
-          python3 \
-            build-system/Make/ImportCertificates.py \
-            --path build-system/fake-codesigning/certs
-
-          python3 -u \
-            build-system/Make/Make.py \
+          python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
+          python3 -u build-system/Make/Make.py \
             --bazelUserRoot="$BAZEL_USER_ROOT" \
             build \
             --configurationPath="build-system/appstore-configuration.json" \
-            --codesigningInformationPath="build-system/fake-codesigning" \
+            --codesigningInformationPath=build-system/fake-codesigning \
             --configuration=release_arm64 \
             --buildNumber="$BUILD_NUMBER"
 
-      - name: Collect IPA
-        shell: bash
-        run: |
-          set -e
+          # collect ipa
+          OUTPUT_PATH="build/artifacts"
+          rm -rf "$OUTPUT_PATH"
+          mkdir -p "$OUTPUT_PATH"
+          for f in bazel-out/applebin_ios-ios_arm*-opt-ST-*/bin/Telegram/Telegram.ipa; do
+            cp "$f" $OUTPUT_PATH/
+          done
 
-          SOURCE_DIR=/Users/Shared/telegram-ios
+          # collect dsym
+          mkdir -p build/DSYMs
+          for f in bazel-out/applebin_ios-ios_arm*-opt-ST-*/bin/Telegram/*.dSYM; do
+            cp -R "$f" build/DSYMs/
+          done
+          zip -r "./$OUTPUT_PATH/Telegram.DSYMs.zip" build/DSYMs 1>/dev/null
 
-          cd "$SOURCE_DIR"
-
-          mkdir -p build/artifacts
-
-          echo "Searching for IPA..."
-
-          find bazel-bin -type f -name "*.ipa" -print
-
-          IPA_PATH="bazel-bin/Telegram/Swiftgram.ipa"
-
-          if [ ! -f "$IPA_PATH" ]; then
-            echo "Expected IPA not found."
-
-            IPA_PATH="$(
-              find bazel-bin \
-                -type f \
-                -name "*.ipa" \
-                -print \
-                -quit
-            )"
-          fi
-
-          if [ -z "$IPA_PATH" ] || [ ! -f "$IPA_PATH" ]; then
-            echo "ERROR: No IPA was produced."
-            exit 1
-          fi
-
-          cp "$IPA_PATH" \
-            build/artifacts/Biogram.ipa
-
-          echo "IPA successfully collected:"
-          ls -lh build/artifacts/Biogram.ipa
-
-      - name: Verify IPA
-        shell: bash
-        run: |
-          set -e
-
-          SOURCE_DIR=/Users/Shared/telegram-ios
-          IPA="$SOURCE_DIR/build/artifacts/Biogram.ipa"
-
-          test -f "$IPA"
-
-          echo "IPA:"
-          ls -lh "$IPA"
-
-          echo ""
-          echo "IPA contents:"
-          unzip -l "$IPA" | head -80
-
-      - name: Upload IPA
-        uses: actions/upload-artifact@v4
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          name: Biogram-IPA
-          path: /Users/Shared/telegram-ios/build/artifacts/Biogram.ipa
-          if-no-files-found: error
-          retention-days: 7
+          tag_name: build-${{ env.BUILD_NUMBER }}
+          release_name: Telegram ${{ env.APP_VERSION }} (${{ env.BUILD_NUMBER }})
+          body: |
+            An unsigned build of Telegram for iOS ${{ env.APP_VERSION }} (${{ env.BUILD_NUMBER }})
+          draft: false
+          prerelease: false
+
+      - name: Upload Release IPA
+        id: upload-release-ipa 
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: /Users/Shared/telegram-ios/build/artifacts/Telegram.ipa
+          asset_name: Telegram.ipa
+          asset_content_type: application/zip
+
+      - name: Upload Release DSYM
+        id: upload-release-dsym 
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: /Users/Shared/telegram-ios/build/artifacts/Telegram.DSYMs.zip
+          asset_name: Telegram.DSYMs.zip
+          asset_content_type: application/zip
