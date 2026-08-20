@@ -407,10 +407,7 @@ jobs:
             'import json; print(json.load(open("versions.json"))["app"])'
           )"
 
-          COMMIT_COUNT="$(git rev-list --count HEAD)"
-
-          COMMIT_COUNT="$(
-            (
+          COMMIT_COUNT=$((COMMIT_COUNT + BUILD_NUMBER_OFFSET))
               COMMIT_COUNT + BUILD_NUMBER_OFFSET
             )
           )"
