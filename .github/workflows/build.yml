@@ -11,6 +11,7 @@ jobs:
     runs-on: macos-latest
 
     steps:
+
       # ------------------------------------------------------------
       # 1. Checkout
       # ------------------------------------------------------------
@@ -64,13 +65,6 @@ jobs:
 
       # ------------------------------------------------------------
       # 4. Prepare configuration
-      #
-      # TELEGRAM_API_HASH comes from GitHub Secrets.
-      #
-      # IMPORTANT:
-      # We do NOT put the API hash into the public repository.
-      #
-      # We also remove the invalid Team ID 35D5MQWUAV.
       # ------------------------------------------------------------
       - name: Prepare build configuration
         shell: bash
@@ -105,14 +99,10 @@ jobs:
           with open(path, "r", encoding="utf-8") as f:
               config = json.load(f)
 
-          # Inject secret only inside the temporary GitHub runner.
           config["api_hash"] = os.environ["TELEGRAM_API_HASH"]
 
-          # This build uses fake-codesigning.
-          # Do not use the чужой Team ID from the repository.
           config["team_id"] = ""
 
-          # These are appropriate for a non-App-Store build.
           config["is_internal_build"] = "true"
           config["is_appstore_build"] = "false"
           config["appstore_id"] = "0"
@@ -161,11 +151,47 @@ jobs:
           echo "BUILD_NUMBER=$BUILD_NUMBER"
           echo "========================================"
 
-          # Import fake signing certificates.
+          # --------------------------------------------------------
+          # Import fake signing certificates
+          # --------------------------------------------------------
           python3 build-system/Make/ImportCertificates.py \
             --path build-system/fake-codesigning/certs
 
-          # Build arm64 IPA.
+          # --------------------------------------------------------
+          # Check provisioning profiles
+          # --------------------------------------------------------
+          echo ""
+          echo "========================================"
+          echo "Checking provisioning profiles"
+          echo "========================================"
+
+          for PROFILE in build-system/fake-codesigning/profiles/*.mobileprovision; do
+            echo ""
+            echo "----------------------------------------"
+            echo "PROFILE: $PROFILE"
+            echo "----------------------------------------"
+
+            security cms -D \
+              -i "$PROFILE" \
+              -o /tmp/profile.plist
+
+            echo "Bundle identifier:"
+            /usr/libexec/PlistBuddy \
+              -c "Print :Entitlements:application-identifier" \
+              /tmp/profile.plist 2>/dev/null || true
+
+            echo "APS environment:"
+            /usr/libexec/PlistBuddy \
+              -c "Print :Entitlements:aps-environment" \
+              /tmp/profile.plist 2>/dev/null || echo "NO aps-environment"
+
+          done
+
+          echo ""
+          echo "========================================"
+          echo "Starting Make.py"
+          echo "========================================"
+
           python3 -u build-system/Make/Make.py \
             --bazelUserRoot="$BAZEL_USER_ROOT" \
             build \
@@ -238,6 +264,7 @@ jobs:
             2>/dev/null || true
 
           if find build/DSYMs -type d -name "*.dSYM" | grep -q .; then
+
             echo "Creating DSYM archive..."
 
             cd build
@@ -249,9 +276,12 @@ jobs:
 
             echo "DSYM archive created:"
             ls -lh artifacts/Telegram.DSYMs.zip
+
           else
+
             echo "No DSYM files found."
             echo "This is NOT a build failure."
+
           fi
 
       # ------------------------------------------------------------
@@ -282,7 +312,7 @@ jobs:
           unzip -l "$IPA" | head -50
 
       # ------------------------------------------------------------
-      # 9. Upload IPA
+      # 9. Upload IPA artifact
       # ------------------------------------------------------------
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
