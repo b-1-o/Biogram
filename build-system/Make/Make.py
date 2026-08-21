@@ -510,7 +510,7 @@ def resolve_configuration(base_path, bazel_command_line: BazelCommandLine, argum
         shutil.rmtree(provisioning_path)
     os.makedirs(provisioning_path, exist_ok=True)
 
-        codesigning_data = resolve_codesigning(
+    codesigning_data = resolve_codesigning(
         arguments=arguments,
         base_path=base_path,
         build_configuration=build_configuration,
@@ -526,7 +526,12 @@ def resolve_configuration(base_path, bazel_command_line: BazelCommandLine, argum
         )
 
     if bazel_command_line is not None:
-        build_configuration.write_to_variables_file(bazel_path=bazel_command_line.bazel, use_xcode_managed_codesigning=codesigning_data.use_xcode_managed_codesigning, aps_environment=codesigning_data.aps_environment, path=configuration_repository_path + '/variables.bzl')
+        build_configuration.write_to_variables_file(
+            bazel_path=bazel_command_line.bazel,
+            use_xcode_managed_codesigning=codesigning_data.use_xcode_managed_codesigning,
+            aps_environment=codesigning_data.aps_environment,
+            path=configuration_repository_path + '/variables.bzl'
+        )
 
     provisioning_profile_files = []
     for file_name in os.listdir(provisioning_path):
