@@ -1,9 +1,6 @@
-name: CI
+name: Biogram CI
 
 on:
-  # push:
-  #   branches: [ master ]
-
   workflow_dispatch:
 
 jobs:
@@ -11,99 +8,402 @@ jobs:
     runs-on: macos-13
 
     steps:
-      - uses: actions/checkout@v2
+      # ============================================================
+      # CHECKOUT
+      # ============================================================
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
-          submodules: 'recursive'
-          fetch-depth: '0'
+          submodules: recursive
+          fetch-depth: 0
 
-      - name: Set active Xcode path
+      # ============================================================
+      # XCODE
+      # ============================================================
+      - name: Set active Xcode
         run: |
-          XCODE_VERSION=$(cat versions.json | python3 -c 'import json,sys;obj=json.load(sys.stdin);print(obj["xcode"]);')
-          sudo xcode-select -s /Applications/Xcode_$XCODE_VERSION.app/Contents/Developer
+          set -euo pipefail
 
+          XCODE_VERSION="$(
+            python3 -c \
+            'import json; print(json.load(open("versions.json"))["xcode"])'
+          )"
+
+          echo "Required Xcode: $XCODE_VERSION"
+
+          XCODE_PATH="/Applications/Xcode_${XCODE_VERSION}.app/Contents/Developer"
+
+          if [ ! -d "$XCODE_PATH" ]; then
+            echo "ERROR: Xcode was not found:"
+            echo "$XCODE_PATH"
+            echo
+            echo "Installed Xcode versions:"
+            ls -la /Applications/ | grep Xcode || true
+            exit 1
+          fi
+
+          sudo xcode-select -s "$XCODE_PATH"
+
+          echo
+          echo "Active Xcode:"
+          xcode-select -p
+
+          echo
+          echo "Xcode version:"
+          xcodebuild -version
+
+      # ============================================================
+      # CANONICAL SOURCE DIRECTORY
+      # ============================================================
       - name: Create canonical source directory
         run: |
+          set -euo pipefail
           set -x
+
+          SOURCE_DIR="/Users/Shared/telegram-ios"
+
           sudo mkdir -p /Users/Shared
-          cp -R $GITHUB_WORKSPACE /Users/Shared/
-          mv /Users/Shared/$(basename $GITHUB_WORKSPACE) /Users/Shared/telegram-ios
 
-      - name: Build the App
+          sudo rm -rf "$SOURCE_DIR"
+
+          sudo cp -R "$GITHUB_WORKSPACE" "$SOURCE_DIR"
+
+          sudo chown -R "$(whoami)" "$SOURCE_DIR"
+
+          echo "Canonical source directory:"
+          echo "$SOURCE_DIR"
+
+          ls -la "$SOURCE_DIR"
+
+      # ============================================================
+      # PREPARE BUILD ENVIRONMENT
+      # ============================================================
+      - name: Prepare build environment
         run: |
+          set -euo pipefail
           set -x
 
-          # source code paths are included in the final binary, so we need to make them stable across builds
-          SOURCE_DIR=/Users/Shared/telegram-ios
+          SOURCE_DIR="/Users/Shared/telegram-ios"
 
-          # use canonical bazel root
-          BAZEL_USER_ROOT="/private/var/tmp/_bazel_containerhost"
+          cd "$SOURCE_DIR"
 
-          cd $SOURCE_DIR
+          echo "========================================"
+          echo "Biogram build environment"
+          echo "========================================"
+
+          echo "Current directory:"
+          pwd
+
+          echo
+          echo "Git branch:"
+          git branch --show-current
+
+          echo
+          echo "Git commit:"
+          git rev-parse HEAD
+
+          echo
+          echo "Git status:"
+          git status --short
+
+          echo
+          echo "Telegram/BUILD status:"
+          git status --short Telegram/BUILD || true
+
+          echo
+          echo "Telegram/BUILD SHA:"
+          git hash-object Telegram/BUILD
+
+          echo
+          echo "Python:"
+          python3 --version
+
+          echo
+          echo "Bazel files:"
+          ls -la
+
+          echo
+          echo "========================================"
+
+      # ============================================================
+      # FAKE CODESIGNING
+      # ============================================================
+      - name: Prepare fake codesigning
+        run: |
+          set -euo pipefail
+          set -x
+
+          SOURCE_DIR="/Users/Shared/telegram-ios"
+
+          cd "$SOURCE_DIR"
+
+          python3 build-system/Make/ImportCertificates.py \
+            --path build-system/fake-codesigning/certs
+
+          echo
+          echo "Fake codesigning prepared."
+
+          find build-system/fake-codesigning \
+            -maxdepth 3 \
+            -type f \
+            -print
+
+      # ============================================================
+      # BUILD NUMBER
+      # ============================================================
+      - name: Calculate build number
+        run: |
+          set -euo pipefail
+
+          SOURCE_DIR="/Users/Shared/telegram-ios"
+
+          cd "$SOURCE_DIR"
 
           BUILD_NUMBER_OFFSET="$(cat build_number_offset)"
 
-          export APP_VERSION=$(cat versions.json | python3 -c 'import json,sys;obj=json.load(sys.stdin);print(obj["app"]);')
-          export COMMIT_COUNT=$(git rev-list --count HEAD)
-          export COMMIT_COUNT="$(($COMMIT_COUNT+$BUILD_NUMBER_OFFSET))"
-          export BUILD_NUMBER="$COMMIT_COUNT"
-          echo "BUILD_NUMBER=$(echo $BUILD_NUMBER)" >> $GITHUB_ENV
-          echo "APP_VERSION=$(echo $APP_VERSION)" >> $GITHUB_ENV
+          APP_VERSION="$(
+            python3 -c \
+            'import json; print(json.load(open("versions.json"))["app"])'
+          )"
 
-          python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
+          COMMIT_COUNT="$(git rev-list --count HEAD)"
+
+          BUILD_NUMBER="$((COMMIT_COUNT + BUILD_NUMBER_OFFSET))"
+
+          echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
+
+          echo "========================================"
+          echo "Biogram build information"
+          echo "========================================"
+          echo "App version:       $APP_VERSION"
+          echo "Commit count:      $COMMIT_COUNT"
+          echo "Build offset:      $BUILD_NUMBER_OFFSET"
+          echo "Build number:      $BUILD_NUMBER"
+          echo "Commit:            $(git rev-parse HEAD)"
+          echo "Branch:            $(git branch --show-current)"
+          echo "========================================"
+
+      # ============================================================
+      # BUILD
+      # ============================================================
+      - name: Build Biogram
+        run: |
+          set -euo pipefail
+          set -x
+
+          SOURCE_DIR="/Users/Shared/telegram-ios"
+
+          BAZEL_USER_ROOT="/private/var/tmp/_bazel_containerhost"
+
+          cd "$SOURCE_DIR"
+
+          echo "========================================"
+          echo "Starting Biogram build"
+          echo "========================================"
+
+          echo "App version:  $APP_VERSION"
+          echo "Build number: $BUILD_NUMBER"
+
           python3 -u build-system/Make/Make.py \
             --bazelUserRoot="$BAZEL_USER_ROOT" \
             build \
             --configurationPath="build-system/appstore-configuration.json" \
-            --codesigningInformationPath=build-system/fake-codesigning \
+            --codesigningInformationPath="build-system/fake-codesigning" \
             --configuration=release_arm64 \
             --buildNumber="$BUILD_NUMBER"
 
-          # collect ipa
-          OUTPUT_PATH="build/artifacts"
+          echo
+          echo "========================================"
+          echo "Make.py build finished"
+          echo "========================================"
+
+      # ============================================================
+      # DEBUG BUILD OUTPUT
+      # ============================================================
+      - name: Inspect build output
+        if: always()
+        run: |
+          set -euo pipefail
+
+          SOURCE_DIR="/Users/Shared/telegram-ios"
+
+          cd "$SOURCE_DIR"
+
+          echo "========================================"
+          echo "Searching for IPA files"
+          echo "========================================"
+
+          find bazel-bin bazel-out \
+            -type f \
+            -name '*.ipa' \
+            -print 2>/dev/null || true
+
+          echo
+          echo "========================================"
+          echo "Searching for dSYM files"
+          echo "========================================"
+
+          find bazel-bin bazel-out \
+            -type d \
+            -name '*.dSYM' \
+            -print 2>/dev/null || true
+
+      # ============================================================
+      # COLLECT ARTIFACTS
+      # ============================================================
+      - name: Collect build artifacts
+        run: |
+          set -euo pipefail
+          set -x
+
+          SOURCE_DIR="/Users/Shared/telegram-ios"
+
+          cd "$SOURCE_DIR"
+
+          OUTPUT_PATH="$SOURCE_DIR/build/artifacts"
+
           rm -rf "$OUTPUT_PATH"
+
           mkdir -p "$OUTPUT_PATH"
-          for f in bazel-out/applebin_ios-ios_arm*-opt-ST-*/bin/Telegram/Telegram.ipa; do
-            cp "$f" $OUTPUT_PATH/
-          done
+          mkdir -p "$SOURCE_DIR/build/DSYMs"
 
-          # collect dsym
-          mkdir -p build/DSYMs
-          for f in bazel-out/applebin_ios-ios_arm*-opt-ST-*/bin/Telegram/*.dSYM; do
-            cp -R "$f" build/DSYMs/
-          done
-          zip -r "./$OUTPUT_PATH/Telegram.DSYMs.zip" build/DSYMs 1>/dev/null
+          echo "========================================"
+          echo "Collecting IPA"
+          echo "========================================"
 
-      - name: Create Release
+          IPA_PATH=""
+
+          if [ -f "bazel-bin/Telegram/Swiftgram.ipa" ]; then
+            IPA_PATH="bazel-bin/Telegram/Swiftgram.ipa"
+          else
+            IPA_PATH="$(
+              find bazel-bin bazel-out \
+                -type f \
+                -name 'Swiftgram.ipa' \
+                -print \
+                -quit 2>/dev/null || true
+            )"
+          fi
+
+          if [ -z "$IPA_PATH" ]; then
+            echo "ERROR: Swiftgram.ipa was not found."
+
+            echo
+            echo "All IPA files:"
+            find bazel-bin bazel-out \
+              -type f \
+              -name '*.ipa' \
+              -print 2>/dev/null || true
+
+            echo
+            echo "Telegram bazel-bin:"
+            find bazel-bin/Telegram \
+              -maxdepth 3 \
+              -print 2>/dev/null || true
+
+            exit 1
+          fi
+
+          echo "Found IPA:"
+          echo "$IPA_PATH"
+
+          cp "$IPA_PATH" "$OUTPUT_PATH/Biogram.ipa"
+
+          echo
+          echo "Biogram IPA:"
+          ls -lh "$OUTPUT_PATH/Biogram.ipa"
+
+          # ========================================================
+          # DSYMs
+          # ========================================================
+
+          echo
+          echo "========================================"
+          echo "Collecting dSYM files"
+          echo "========================================"
+
+          find bazel-bin bazel-out \
+            -type d \
+            -name '*.dSYM' \
+            -print \
+            -exec cp -R {} "$SOURCE_DIR/build/DSYMs/" \; \
+            2>/dev/null || true
+
+          DSYM_COUNT="$(
+            find "$SOURCE_DIR/build/DSYMs" \
+              -mindepth 1 \
+              -maxdepth 1 \
+              -type d \
+              -name '*.dSYM' \
+              | wc -l \
+              | tr -d ' '
+          )"
+
+          echo "dSYM count: $DSYM_COUNT"
+
+          if [ "$DSYM_COUNT" -gt 0 ]; then
+            cd "$SOURCE_DIR"
+
+            zip -r \
+              "$OUTPUT_PATH/Biogram.DSYMs.zip" \
+              build/DSYMs
+
+            echo
+            echo "DSYM archive:"
+            ls -lh "$OUTPUT_PATH/Biogram.DSYMs.zip"
+          else
+            echo "No dSYM files found."
+          fi
+
+          echo
+          echo "========================================"
+          echo "Final artifacts"
+          echo "========================================"
+
+          ls -lah "$OUTPUT_PATH"
+
+      # ============================================================
+      # UPLOAD IPA
+      # ============================================================
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Biogram-${{ env.APP_VERSION }}-${{ env.BUILD_NUMBER }}
+          path: /Users/Shared/telegram-ios/build/artifacts/Biogram.ipa
+          if-no-files-found: error
+
+      # ============================================================
+      # UPLOAD DSYMs
+      # ============================================================
+      - name: Upload DSYM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Biogram-DSYMs-${{ env.APP_VERSION }}-${{ env.BUILD_NUMBER }}
+          path: /Users/Shared/telegram-ios/build/artifacts/Biogram.DSYMs.zip
+          if-no-files-found: warn
+
+      # ============================================================
+      # GITHUB RELEASE
+      # ============================================================
+      - name: Create GitHub Release
         id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: build-${{ env.BUILD_NUMBER }}
-          release_name: Telegram ${{ env.APP_VERSION }} (${{ env.BUILD_NUMBER }})
+          tag_name: "build-${{ env.BUILD_NUMBER }}"
+          name: "Biogram ${{ env.APP_VERSION }} (${{ env.BUILD_NUMBER }})"
           body: |
-            An unsigned build of Telegram for iOS ${{ env.APP_VERSION }} (${{ env.BUILD_NUMBER }})
+            # Biogram iOS
+
+            Version: ${{ env.APP_VERSION }}
+            Build: ${{ env.BUILD_NUMBER }}
+
+            Commit: ${{ github.sha }}
+            Branch: ${{ github.ref_name }}
+
+            Automatically generated Biogram iOS build.
           draft: false
-          prerelease: false
-
-      - name: Upload Release IPA
-        id: upload-release-ipa 
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: /Users/Shared/telegram-ios/build/artifacts/Telegram.ipa
-          asset_name: Telegram.ipa
-          asset_content_type: application/zip
-
-      - name: Upload Release DSYM
-        id: upload-release-dsym 
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: /Users/Shared/telegram-ios/build/artifacts/Telegram.DSYMs.zip
-          asset_name: Telegram.DSYMs.zip
-          asset_content_type: application/zip
+          prerelease: true
+          files: |
+            /Users/Shared/telegram-ios/build/artifacts/Biogram.ipa
+            /Users/Shared/telegram-ios/build/artifacts/Biogram.DSYMs.zip
