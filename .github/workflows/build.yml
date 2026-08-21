@@ -18,11 +18,15 @@ jobs:
         run: |
           set -euxo pipefail
 
-          XCODE_VERSION="$(python3 -c 'import json; print(json.load(open("versions.json"))["xcode"])')"
+          XCODE_VERSION="$(
+            python3 -c \
+              'import json; print(json.load(open("versions.json"))["xcode"])'
+          )"
 
           echo "Requested Xcode: $XCODE_VERSION"
 
-          sudo xcode-select -s "/Applications/Xcode_${XCODE_VERSION}.app/Contents/Developer"
+          sudo xcode-select \
+            -s "/Applications/Xcode_${XCODE_VERSION}.app/Contents/Developer"
 
           xcodebuild -version
 
@@ -32,25 +36,100 @@ jobs:
 
           sudo mkdir -p /Users/Shared
 
-          rm -rf /Users/Shared/telegram-ios
+          sudo rm -rf /Users/Shared/telegram-ios
 
-          cp -R "$GITHUB_WORKSPACE" /Users/Shared/telegram-ios
+          sudo cp -R \
+            "$GITHUB_WORKSPACE" \
+            /Users/Shared/telegram-ios
 
-      - name: Prepare Biogram provisioning profiles
+          sudo chown -R "$(whoami)" /Users/Shared/telegram-ios
+
+      # ------------------------------------------------------------
+      # IMPORT SELF-SIGNED CERTIFICATE BEFORE GENERATING PROFILES
+      # ------------------------------------------------------------
+
+      - name: Import Biogram signing certificates
         working-directory: /Users/Shared/telegram-ios
         run: |
           set -euxo pipefail
 
-          echo "Generating Biogram provisioning profiles..."
+          echo "========================================"
+          echo "Importing Biogram signing certificates"
+          echo "========================================"
 
-          python3 build-system/Make/GenerateBiogramProfiles.py
+          test -f \
+            build-system/fake-codesigning/certs/SelfSigned.p12
 
+          test -f \
+            build-system/fake-codesigning/certs/Public.cer
+
+          python3 \
+            build-system/Make/ImportCertificates.py \
+            --path build-system/fake-codesigning/certs
+
+          echo
+          echo "Available code-signing identities:"
+          echo
+
+          security find-identity \
+            -v \
+            -p codesigning || true
+
+          echo
+          echo "Searching for SelfSigned:"
+          echo
+
+          security find-certificate \
+            -c "SelfSigned" \
+            -a || true
+
+      # ------------------------------------------------------------
+      # GENERATE BUNDLE-ID-SPECIFIC FAKE PROVISIONING PROFILES
+      # ------------------------------------------------------------
+
+      - name: Generate Biogram provisioning profiles
+        working-directory: /Users/Shared/telegram-ios
+        run: |
+          set -euxo pipefail
+
+          echo "========================================"
+          echo "Generating Biogram provisioning profiles"
+          echo "========================================"
+
+          python3 \
+            build-system/Make/GenerateBiogramProfiles.py
+
+          echo
           echo "Generated profiles:"
-          find build-system/fake-codesigning/biogram-profiles \
+          echo
+
+          find \
+            build-system/fake-codesigning/biogram-profiles \
             -maxdepth 1 \
             -type f \
             -name "*.mobileprovision" \
             -print
+
+          PROFILE_COUNT="$(
+            find \
+              build-system/fake-codesigning/biogram-profiles \
+              -maxdepth 1 \
+              -type f \
+              -name "*.mobileprovision" \
+              | wc -l
+          )"
+
+          echo
+          echo "Profile count: $PROFILE_COUNT"
+
+          if [ "$PROFILE_COUNT" -ne 9 ]; then
+            echo "ERROR: Expected 9 Biogram provisioning profiles."
+            exit 1
+          fi
+
+      # ------------------------------------------------------------
+      # USE GENERATED PROFILES AS THE ACTIVE PROFILES
+      # ------------------------------------------------------------
 
       - name: Install Biogram provisioning profiles
         working-directory: /Users/Shared/telegram-ios
@@ -61,35 +140,56 @@ jobs:
           DEST="build-system/fake-codesigning/profiles"
 
           test -d "$SOURCE"
+          test -d "$DEST"
+
+          echo "Replacing old provisioning profiles..."
+
+          rm -f "$DEST"/*.mobileprovision
 
           for profile in "$SOURCE"/*.mobileprovision; do
             test -f "$profile"
 
             filename="$(basename "$profile")"
 
-            echo "Installing $filename"
+            echo "Installing: $filename"
 
             cp "$profile" "$DEST/$filename"
           done
 
           echo
           echo "Final provisioning profiles:"
-          find "$DEST" \
+          echo
+
+          find \
+            "$DEST" \
             -maxdepth 1 \
             -type f \
             -name "*.mobileprovision" \
             -print
 
-      - name: Verify provisioning profiles
+      # ------------------------------------------------------------
+      # VERIFY PROFILES
+      # ------------------------------------------------------------
+
+      - name: Verify Biogram provisioning profiles
         working-directory: /Users/Shared/telegram-ios
         run: |
           set -euxo pipefail
 
-          for profile in build-system/fake-codesigning/profiles/*.mobileprovision; do
+          echo "========================================"
+          echo "Verifying provisioning profiles"
+          echo "========================================"
+
+          EXPECTED_TEAM_ID="C67CF9S4VU"
+          EXPECTED_BUNDLE_ID="org.28d7790dd5d2e37c.Swiftgram"
+
+          for profile in \
+            build-system/fake-codesigning/profiles/*.mobileprovision
+          do
             echo
-            echo "========================================"
-            echo "$profile"
-            echo "========================================"
+            echo "----------------------------------------"
+            echo "PROFILE: $profile"
+            echo "----------------------------------------"
 
             TMP="$(mktemp)"
 
@@ -98,31 +198,67 @@ jobs:
               -i "$profile" \
               > "$TMP"
 
-            APS="$(/usr/libexec/PlistBuddy \
-              -c "Print :Entitlements:aps-environment" \
-              "$TMP" 2>/dev/null || true)"
+            APP_ID="$(
+              /usr/libexec/PlistBuddy \
+                -c "Print :Entitlements:application-identifier" \
+                "$TMP" \
+                2>/dev/null || true
+            )"
 
-            APP_ID="$(/usr/libexec/PlistBuddy \
-              -c "Print :Entitlements:application-identifier" \
-              "$TMP" 2>/dev/null || true)"
+            TEAM_ID="$(
+              /usr/libexec/PlistBuddy \
+                -c "Print :Entitlements:com.apple.developer.team-identifier" \
+                "$TMP" \
+                2>/dev/null || true
+            )"
 
-            TEAM_ID="$(/usr/libexec/PlistBuddy \
-              -c "Print :Entitlements:com.apple.developer.team-identifier" \
-              "$TMP" 2>/dev/null || true)"
+            APS="$(
+              /usr/libexec/PlistBuddy \
+                -c "Print :Entitlements:aps-environment" \
+                "$TMP" \
+                2>/dev/null || true
+            )"
 
             echo "application-identifier: $APP_ID"
-            echo "team-identifier:       $TEAM_ID"
-            echo "aps-environment:       ${APS:-MISSING}"
+            echo "team-identifier:         $TEAM_ID"
+            echo "aps-environment:         ${APS:-MISSING}"
 
             rm -f "$TMP"
 
+            if [ "$TEAM_ID" != "$EXPECTED_TEAM_ID" ]; then
+              echo "ERROR: Team ID mismatch."
+              exit 1
+            fi
+
+            case "$APP_ID" in
+              "$EXPECTED_TEAM_ID.$EXPECTED_BUNDLE_ID"*)
+                ;;
+              *)
+                echo "ERROR: Bundle ID mismatch."
+                echo "Expected prefix:"
+                echo "$EXPECTED_TEAM_ID.$EXPECTED_BUNDLE_ID"
+                exit 1
+                ;;
+            esac
+
             if [ "$(basename "$profile")" = "Telegram.mobileprovision" ]; then
               if [ "$APS" != "production" ]; then
-                echo "ERROR: Telegram.mobileprovision does not contain aps-environment=production"
+                echo "ERROR:"
+                echo "Telegram.mobileprovision must contain:"
+                echo "aps-environment = production"
                 exit 1
               fi
             fi
           done
+
+          echo
+          echo "========================================"
+          echo "Provisioning profiles are valid"
+          echo "========================================"
+
+      # ------------------------------------------------------------
+      # BUILD
+      # ------------------------------------------------------------
 
       - name: Build the App
         working-directory: /Users/Shared/telegram-ios
@@ -142,12 +278,12 @@ jobs:
               'import json; print(json.load(open("versions.json"))["app"])'
           )"
 
-          export COMMIT_COUNT="$(git rev-list --count HEAD)"
+          export COMMIT_COUNT="$(
+            git rev-list --count HEAD
+          )"
 
           export COMMIT_COUNT="$(
-            (
-              COMMIT_COUNT + BUILD_NUMBER_OFFSET
-            )
+            COMMIT_COUNT + BUILD_NUMBER_OFFSET
           )"
 
           export BUILD_NUMBER="$COMMIT_COUNT"
@@ -155,6 +291,7 @@ jobs:
           echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
           echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
 
+          echo
           echo "========================================"
           echo "Biogram build"
           echo "========================================"
@@ -164,16 +301,18 @@ jobs:
           echo "Branch:       $(git branch --show-current)"
           echo "========================================"
 
-          python3 build-system/Make/ImportCertificates.py \
-            --path build-system/fake-codesigning/certs
-
-          python3 -u build-system/Make/Make.py \
+          python3 -u \
+            build-system/Make/Make.py \
             --bazelUserRoot="$BAZEL_USER_ROOT" \
             build \
             --configurationPath="build-system/appstore-configuration.json" \
             --codesigningInformationPath=build-system/fake-codesigning \
             --configuration=release_arm64 \
             --buildNumber="$BUILD_NUMBER"
+
+      # ------------------------------------------------------------
+      # COLLECT IPA
+      # ------------------------------------------------------------
 
       - name: Collect IPA
         working-directory: /Users/Shared/telegram-ios
@@ -187,21 +326,24 @@ jobs:
 
           FOUND_IPA=0
 
-          for f in \
-            bazel-out/applebin_ios-ios_arm*-opt-ST-*/bin/Telegram/Telegram.ipa
-          do
-            if [ -f "$f" ]; then
-              echo "Found IPA: $f"
+          while IFS= read -r -d '' f; do
+            echo "Found IPA: $f"
 
-              cp "$f" "$OUTPUT_PATH/Telegram.ipa"
+            cp \
+              "$f" \
+              "$OUTPUT_PATH/Biogram.ipa"
 
-              FOUND_IPA=1
-              break
-            fi
-          done
+            FOUND_IPA=1
+            break
+          done < <(
+            find bazel-out \
+              -type f \
+              -name "Telegram.ipa" \
+              -print0
+          )
 
           if [ "$FOUND_IPA" -ne 1 ]; then
-            echo "ERROR: Telegram.ipa was not produced."
+            echo "ERROR: Biogram IPA was not produced."
 
             find bazel-out \
               -type f \
@@ -211,7 +353,13 @@ jobs:
             exit 1
           fi
 
-          ls -lh "$OUTPUT_PATH/Telegram.ipa"
+          echo
+          echo "IPA:"
+          ls -lh "$OUTPUT_PATH/Biogram.ipa"
+
+      # ------------------------------------------------------------
+      # COLLECT DSYM
+      # ------------------------------------------------------------
 
       - name: Collect dSYM
         working-directory: /Users/Shared/telegram-ios
@@ -225,7 +373,9 @@ jobs:
           while IFS= read -r -d '' dsym; do
             echo "Found dSYM: $dsym"
 
-            cp -R "$dsym" build/DSYMs/
+            cp -R \
+              "$dsym" \
+              build/DSYMs/
 
             FOUND_DSYM=1
           done < <(
@@ -236,30 +386,48 @@ jobs:
           )
 
           if [ "$FOUND_DSYM" -eq 1 ]; then
+
             zip -r \
-              "./build/artifacts/Telegram.DSYMs.zip" \
+              "./build/artifacts/Biogram.DSYMs.zip" \
               build/DSYMs \
               >/dev/null
 
-            ls -lh "./build/artifacts/Telegram.DSYMs.zip"
+            ls -lh \
+              "./build/artifacts/Biogram.DSYMs.zip"
+
           else
             echo "WARNING: No dSYM files were produced."
           fi
+
+      # ------------------------------------------------------------
+      # FINAL ARTIFACT CHECK
+      # ------------------------------------------------------------
 
       - name: Verify artifacts
         working-directory: /Users/Shared/telegram-ios
         run: |
           set -euxo pipefail
 
-          echo "Artifacts:"
+          echo "========================================"
+          echo "Final artifacts"
+          echo "========================================"
 
-          find build/artifacts \
+          find \
+            build/artifacts \
             -maxdepth 1 \
             -type f \
             -print \
             -exec ls -lh {} \;
 
-          test -f build/artifacts/Telegram.ipa
+          test -f \
+            build/artifacts/Biogram.ipa
+
+          echo
+          echo "Biogram IPA successfully created."
+
+      # ------------------------------------------------------------
+      # GITHUB RELEASE
+      # ------------------------------------------------------------
 
       - name: Create Release
         id: create_release
@@ -275,6 +443,7 @@ jobs:
             Version: ${{ env.APP_VERSION }}
             Build: ${{ env.BUILD_NUMBER }}
 
+            This IPA is intended for sideloading/testing.
           draft: false
           prerelease: true
 
@@ -285,18 +454,18 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: /Users/Shared/telegram-ios/build/artifacts/Telegram.ipa
+          asset_path: /Users/Shared/telegram-ios/build/artifacts/Biogram.ipa
           asset_name: Biogram.ipa
           asset_content_type: application/octet-stream
 
       - name: Upload Release dSYM
-        if: hashFiles('/Users/Shared/telegram-ios/build/artifacts/Telegram.DSYMs.zip') != ''
+        if: hashFiles('/Users/Shared/telegram-ios/build/artifacts/Biogram.DSYMs.zip') != ''
         id: upload-release-dsym
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: /Users/Shared/telegram-ios/build/artifacts/Telegram.DSYMs.zip
+          asset_path: /Users/Shared/telegram-ios/build/artifacts/Biogram.DSYMs.zip
           asset_name: Biogram.DSYMs.zip
           asset_content_type: application/zip
