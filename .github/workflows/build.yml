@@ -81,7 +81,6 @@ jobs:
           echo "Signing identities:"
           security find-identity -v -p codesigning || true
 
-      # ОБЯЗАТЕЛЬНО: переписать ph.telegra.Telegraph -> org.28d7790dd5d2e37c.Swiftgram
       - name: Generate Biogram provisioning profiles
         run: |
           set -euo pipefail
@@ -110,6 +109,8 @@ jobs:
           BAZEL_USER_ROOT="/private/var/tmp/_bazel_containerhost"
           cd "$SOURCE_DIR"
 
+          mkdir -p build/artifacts
+
           echo "Starting Biogram build"
           echo "App version: $APP_VERSION"
           echo "Build number: $BUILD_NUMBER"
@@ -121,33 +122,64 @@ jobs:
             --configurationPath="build-system/appstore-configuration.json" \
             --codesigningInformationPath="build-system/fake-codesigning" \
             --configuration=release_arm64 \
-            --buildNumber="$BUILD_NUMBER"
+            --buildNumber="$BUILD_NUMBER" \
+            --outputBuildArtifactsPath="build/artifacts"
 
       - name: Collect build artifacts
         run: |
           set -euo pipefail
           cd /Users/Shared/telegram-ios
           OUTPUT_PATH="build/artifacts"
-          rm -rf "$OUTPUT_PATH"
           mkdir -p "$OUTPUT_PATH"
 
-          IPA_PATH="$(find bazel-out bazel-bin -type f -name '*.ipa' -print -quit 2>/dev/null || true)"
+          echo "Searching for IPA files..."
+          find bazel-bin bazel-out build -type f -name '*.ipa' 2>/dev/null || true
+
+          IPA_PATH=""
+          for candidate in \
+            "build/artifacts/Swiftgram.ipa" \
+            "build/artifacts/Telegram.ipa" \
+            "build/artifacts/Biogram.ipa" \
+            "bazel-bin/Telegram/Swiftgram.ipa" \
+            "bazel-bin/Telegram/Telegram.ipa"
+          do
+            if [ -f "$candidate" ]; then
+              IPA_PATH="$candidate"
+              break
+            fi
+          done
+
           if [ -z "$IPA_PATH" ]; then
+            IPA_PATH="$(find bazel-bin bazel-out build -type f -name '*.ipa' -print -quit 2>/dev/null || true)"
+          fi
+
+          if [ -z "$IPA_PATH" ] || [ ! -f "$IPA_PATH" ]; then
             echo "ERROR: No IPA found."
-            find . -type f -name '*.ipa' -print 2>/dev/null || true
+            echo "bazel-bin/Telegram:"
+            ls -la bazel-bin/Telegram 2>/dev/null || true
+            echo "build/artifacts:"
+            ls -la build/artifacts 2>/dev/null || true
             exit 1
           fi
-          echo "Found IPA: $IPA_PATH"
-          cp "$IPA_PATH" "$OUTPUT_PATH/Biogram.ipa"
 
-          rm -rf build/DSYMs
-          mkdir -p build/DSYMs
-          find bazel-out bazel-bin -type d -name '*.dSYM' -exec cp -R {} build/DSYMs/ \; 2>/dev/null || true
-          if find build/DSYMs -mindepth 1 -maxdepth 1 -print -quit | grep -q .; then
-            zip -r "$OUTPUT_PATH/Biogram.DSYMs.zip" build/DSYMs >/dev/null
+          echo "Found IPA: $IPA_PATH"
+          cp -f "$IPA_PATH" "$OUTPUT_PATH/Biogram.ipa"
+
+          if [ -f "build/artifacts/Swiftgram.DSYMs.zip" ]; then
+            cp -f "build/artifacts/Swiftgram.DSYMs.zip" "$OUTPUT_PATH/Biogram.DSYMs.zip"
+          elif [ -f "build/artifacts/Telegram.DSYMs.zip" ]; then
+            cp -f "build/artifacts/Telegram.DSYMs.zip" "$OUTPUT_PATH/Biogram.DSYMs.zip"
           else
-            echo "No dSYM files found."
+            rm -rf build/DSYMs
+            mkdir -p build/DSYMs
+            find bazel-out bazel-bin -type d -name '*.dSYM' -exec cp -R {} build/DSYMs/ \; 2>/dev/null || true
+            if find build/DSYMs -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null | grep -q .; then
+              zip -r "$OUTPUT_PATH/Biogram.DSYMs.zip" build/DSYMs >/dev/null
+            else
+              echo "No dSYM files found."
+            fi
           fi
+
           ls -lah "$OUTPUT_PATH"
 
       - name: Upload IPA artifact
