@@ -151,7 +151,7 @@ class BazelCommandLine:
                 '--ios_multi_cpus=arm64',
 
                 # Always build universal Watch binaries.
-                '--watchos_cpus=armv7k,arm64_32'
+                '--watchos_cpus=arm64_32'
             ] + self.common_debug_args
         elif configuration == 'debug_sim_arm64':
             self.configuration_args = [
@@ -162,7 +162,7 @@ class BazelCommandLine:
                 '--ios_multi_cpus=sim_arm64',
 
                 # Always build universal Watch binaries.
-                '--watchos_cpus=armv7k,arm64_32'
+                '--watchos_cpus=arm64_32'
             ] + self.common_debug_args
         elif configuration == 'release_sim_arm64':
             self.configuration_args = [
@@ -173,7 +173,7 @@ class BazelCommandLine:
                 '--ios_multi_cpus=sim_arm64',
 
                 # Always build universal Watch binaries.
-                '--watchos_cpus=armv7k,arm64_32'
+                '--watchos_cpus=arm64_32'
             ] + self.common_debug_args
         elif configuration == 'release_arm64':
             self.configuration_args = [
@@ -184,7 +184,7 @@ class BazelCommandLine:
                 '--ios_multi_cpus=arm64',
 
                 # Always build universal Watch binaries.
-                '--watchos_cpus=armv7k,arm64_32',
+                '--watchos_cpus=arm64_32',
 
                 # Generate DSYM files when building.
                 '--apple_generate_dsym',
@@ -286,7 +286,7 @@ class BazelCommandLine:
         if self.custom_target is not None:
             combined_arguments += [self.custom_target]
         else:
-            combined_arguments += ['Telegram/Swiftgram']
+            combined_arguments += ['Telegram/Telegram']
 
         if self.continue_on_error:
             combined_arguments += ['--keep_going']
@@ -494,97 +494,45 @@ def resolve_configuration(base_path, bazel_command_line: BazelCommandLine, argum
     configuration_repository_path = '{}/build-input/configuration-repository'.format(base_path)
     os.makedirs(configuration_repository_path, exist_ok=True)
 
-    build_configuration = build_configuration_from_json(
-        path=arguments.configurationPath
-    )
+    build_configuration = build_configuration_from_json(path=arguments.configurationPath)
 
     with open(configuration_repository_path + '/WORKSPACE', 'w+') as file:
         pass
 
     with open(configuration_repository_path + '/MODULE.bazel', 'w+') as file:
-        file.write(
-            'module(\n'
-            '    name = "build_configuration",\n'
-            ')\n'
-        )
+        file.write('module(\n    name = "build_configuration",\n)\n')
 
     with open(configuration_repository_path + '/BUILD', 'w+') as file:
         pass
 
-    provisioning_path = '{}/provisioning'.format(
-        configuration_repository_path
-    )
-
+    provisioning_path = '{}/provisioning'.format(configuration_repository_path)
     if os.path.exists(provisioning_path):
         shutil.rmtree(provisioning_path)
-
     os.makedirs(provisioning_path, exist_ok=True)
 
-    # When provisioning profiles are explicitly disabled, do not resolve
-    # certificates or provisioning profiles.
-    #
-    # The final Bazel build receives:
-    #     --//Telegram:disableProvisioningProfiles
-    #
-    # This allows the project to be generated/built without requiring
-    # Telegram provisioning profiles.
-
-    disable_provisioning_profiles = getattr(
-        arguments,
-        'disableProvisioningProfiles',
-        False
+    codesigning_data = resolve_codesigning(
+        arguments=arguments,
+        base_path=base_path,
+        build_configuration=build_configuration,
+        provisioning_profiles_path=provisioning_path,
+        additional_codesigning_output_path=additional_codesigning_output_path
     )
-
-    if disable_provisioning_profiles:
-        print(
-            'TelegramBuild: provisioning profiles disabled; '
-            'skipping codesigning resolution'
-        )
-
-        codesigning_data = ResolvedCodesigningData(
-            aps_environment='',
-            use_xcode_managed_codesigning=False
-        )
-    else:
-        codesigning_data = resolve_codesigning(
-            arguments=arguments,
-            base_path=base_path,
-            build_configuration=build_configuration,
-            provisioning_profiles_path=provisioning_path,
-            additional_codesigning_output_path=additional_codesigning_output_path
-        )
-
-        if codesigning_data.aps_environment is None:
-            print(
-                'Could not find a valid aps-environment entitlement '
-                'in the provided provisioning profiles'
-            )
-            sys.exit(1)
+    if codesigning_data.aps_environment is None:
+        print('Could not find a valid aps-environment entitlement in the provided provisioning profiles')
+        sys.exit(1)
 
     if bazel_command_line is not None:
-        build_configuration.write_to_variables_file(
-            bazel_path=bazel_command_line.bazel,
-            use_xcode_managed_codesigning=(
-                codesigning_data.use_xcode_managed_codesigning
-            ),
-            aps_environment=codesigning_data.aps_environment,
-            path=configuration_repository_path + '/variables.bzl'
-        )
+        build_configuration.write_to_variables_file(bazel_path=bazel_command_line.bazel, use_xcode_managed_codesigning=codesigning_data.use_xcode_managed_codesigning, aps_environment=codesigning_data.aps_environment, path=configuration_repository_path + '/variables.bzl')
 
     provisioning_profile_files = []
-
     for file_name in os.listdir(provisioning_path):
         if file_name.endswith('.mobileprovision'):
             provisioning_profile_files.append(file_name)
 
     with open(provisioning_path + '/BUILD', 'w+') as file:
         file.write('exports_files([\n')
-
         for file_name in provisioning_profile_files:
-            file.write(
-                '    "{}",\n'.format(file_name)
-            )
-
+            file.write('    "{}",\n'.format(file_name))
         file.write('])\n')
 
 
@@ -757,24 +705,24 @@ def build(bazel, arguments):
 
     if arguments.outputBuildArtifactsPath is not None:
         artifacts_path = os.path.abspath(arguments.outputBuildArtifactsPath)
-        if os.path.exists(artifacts_path + '/Swiftgram.ipa'):
-            os.remove(artifacts_path + '/Swiftgram.ipa')
+        if os.path.exists(artifacts_path + '/Telegram.ipa'):
+            os.remove(artifacts_path + '/Telegram.ipa')
         if os.path.exists(artifacts_path + '/DSYMs'):
             shutil.rmtree(artifacts_path + '/DSYMs')
         os.makedirs(artifacts_path, exist_ok=True)
         os.makedirs(artifacts_path + '/DSYMs', exist_ok=True)
 
         built_ipa_path_prefix = 'bazel-bin/Telegram'
-        ipa_paths = glob.glob('{}/Swiftgram.ipa'.format(built_ipa_path_prefix))
+        ipa_paths = glob.glob('{}/Telegram.ipa'.format(built_ipa_path_prefix))
         if len(ipa_paths) == 0:
-            print(f'Could not find the IPA at {built_ipa_path_prefix}/Swiftgram.ipa')
+            print(f'Could not find the IPA at {built_ipa_path_prefix}/Telegram.ipa')
             sys.exit(1)
         elif len(ipa_paths) > 1:
             print('Multiple matching IPA files found: {}'.format(ipa_paths))
             sys.exit(1)
-        shutil.copyfile(ipa_paths[0], artifacts_path + '/Swiftgram.ipa')
+        shutil.copyfile(ipa_paths[0], artifacts_path + '/Telegram.ipa')
 
-        dsym_paths = glob.glob('bazel-bin/Telegram/*.dSYM') + glob.glob('bazel-out/watchos_arm64_32-opt-watchos-arm64_32-min7.0-applebin_watchos-ST-*/bin/Telegram/SwiftgramWatchApp_dsyms/*.dSYM') + glob.glob('bazel-out/watchos_armv7k-opt-watchos-armv7k-min7.0-applebin_watchos-ST-*/bin/Telegram/SwiftgramWatchApp_dsyms/*.dSYM') 
+        dsym_paths = glob.glob('bazel-bin/Telegram/*.dSYM')
         for dsym_path in dsym_paths:
             file_name = os.path.basename(dsym_path)
             shutil.copytree(dsym_path, artifacts_path + '/DSYMs/{}'.format(file_name))
@@ -782,7 +730,7 @@ def build(bazel, arguments):
         os.chdir(artifacts_path)
         run_executable_with_output('zip', arguments=[
             '-r',
-            'Swiftgram.DSYMs.zip',
+            'Telegram.DSYMs.zip',
             './DSYMs'
         ], check_result=True)
         os.chdir(previous_directory)
