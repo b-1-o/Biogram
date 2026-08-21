@@ -8,6 +8,7 @@ import plistlib
 from BuildEnvironment import run_executable_with_output, check_run_system
 from DecryptMatch import decrypt_match_data
 
+
 class BuildConfiguration:
     def __init__(self,
         sg_config,
@@ -207,27 +208,37 @@ def resolve_aps_environment_from_directory(source_path, team_id, bundle_id):
             if not file_path.endswith('.mobileprovision'):
                 continue
 
-            profile_data = run_executable_with_output('openssl', arguments=[
-                'smime',
-                '-inform',
-                'der',
-                '-verify',
-                '-noverify',
-                '-in',
-                file_path
-            ], decode=False, stderr_to_stdout=False, check_result=True)
+            try:
+                profile_data = run_executable_with_output('openssl', arguments=[
+                    'smime',
+                    '-inform',
+                    'der',
+                    '-verify',
+                    '-noverify',
+                    '-in',
+                    file_path
+                ], decode=False, stderr_to_stdout=False, check_result=True)
+            except Exception as e:
+                print('Warning: could not decode profile {}: {}'.format(file_path, e))
+                continue
 
-            profile_dict = plistlib.loads(profile_data)
-            profile_name = profile_dict['Entitlements']['application-identifier']
+            try:
+                profile_dict = plistlib.loads(profile_data)
+                profile_name = profile_dict['Entitlements']['application-identifier']
+            except Exception as e:
+                print('Warning: could not parse profile {}: {}'.format(file_path, e))
+                continue
 
             if profile_name.startswith(team_id + '.' + bundle_id):
                 profile_base_name = profile_name[len(team_id + '.' + bundle_id):]
                 if profile_base_name == '':
                     if 'aps-environment' not in profile_dict['Entitlements']:
                         print('Provisioning profile at {} does not include an aps-environment entitlement'.format(file_path))
-                        sys.exit(1)
+                        return 'development'
                     return profile_dict['Entitlements']['aps-environment']
-    return None
+
+    print('Biogram: no matching profile with aps-environment, defaulting to development')
+    return 'development'
 
 
 def copy_certificates_from_directory(source_path, destination_path):
@@ -252,7 +263,7 @@ class CodesigningSource:
         raise Exception('Not implemented')
 
     def use_xcode_managed_codesigning(self):
-        raise Exception('Not implemented')        
+        raise Exception('Not implemented')
 
     def copy_certificates_to_destination(self, destination_path):
         raise Exception('Not implemented')
@@ -318,10 +329,35 @@ class DirectoryCodesigningSource(CodesigningSource):
         pass
 
     def copy_profiles_to_destination(self, destination_path):
-        copy_profiles_from_directory(source_path=self.directory_path + '/profiles', destination_path=destination_path, team_id=self.team_id, bundle_id=self.bundle_id)
+        # Biogram sideload / fake-codesigning:
+        # copy ALL .mobileprovision files by filename.
+        # Do not filter by application-identifier — fake profiles often
+        # do not match team_id.bundle_id and would otherwise be skipped
+        # (causing missing Share.mobileprovision etc.).
+        source_path = self.directory_path + '/profiles'
+        if not os.path.isdir(source_path):
+            print('Warning: profiles directory does not exist: {}'.format(source_path))
+            return
+
+        for file_name in os.listdir(source_path):
+            if not file_name.endswith('.mobileprovision'):
+                continue
+            src = source_path + '/' + file_name
+            dst = destination_path + '/' + file_name
+            if os.path.isfile(src):
+                shutil.copyfile(src, dst)
+                print('Copied provisioning profile: {}'.format(file_name))
 
     def resolve_aps_environment(self):
-        return resolve_aps_environment_from_directory(source_path=self.directory_path + '/profiles', team_id=self.team_id, bundle_id=self.bundle_id)
+        value = resolve_aps_environment_from_directory(
+            source_path=self.directory_path + '/profiles',
+            team_id=self.team_id,
+            bundle_id=self.bundle_id
+        )
+        if not value:
+            print('Biogram: DirectoryCodesigningSource forcing development')
+            return 'development'
+        return value
 
     def use_xcode_managed_codesigning(self):
         return False
