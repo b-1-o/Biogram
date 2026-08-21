@@ -494,30 +494,41 @@ def resolve_configuration(base_path, bazel_command_line: BazelCommandLine, argum
     configuration_repository_path = '{}/build-input/configuration-repository'.format(base_path)
     os.makedirs(configuration_repository_path, exist_ok=True)
 
-    build_configuration = build_configuration_from_json(path=arguments.configurationPath)
+    build_configuration = build_configuration_from_json(
+        path=arguments.configurationPath
+    )
 
     with open(configuration_repository_path + '/WORKSPACE', 'w+') as file:
         pass
 
     with open(configuration_repository_path + '/MODULE.bazel', 'w+') as file:
-        file.write('module(\n    name = "build_configuration",\n)\n')
+        file.write(
+            'module(\n'
+            '    name = "build_configuration",\n'
+            ')\n'
+        )
 
     with open(configuration_repository_path + '/BUILD', 'w+') as file:
         pass
 
-    provisioning_path = '{}/provisioning'.format(configuration_repository_path)
+    provisioning_path = '{}/provisioning'.format(
+        configuration_repository_path
+    )
+
     if os.path.exists(provisioning_path):
         shutil.rmtree(provisioning_path)
+
     os.makedirs(provisioning_path, exist_ok=True)
 
     # When provisioning profiles are explicitly disabled, do not resolve
-    # certificates or provisioning profiles during configuration.
+    # certificates or provisioning profiles.
     #
-    # The final Bazel build will receive:
-    #   --//Telegram:disableProvisioningProfiles
+    # The final Bazel build receives:
+    #     --//Telegram:disableProvisioningProfiles
     #
-    # This allows the project to be built without valid provisioning profiles
-    # and the resulting IPA can later be signed for sideloading.
+    # This allows the project to be generated/built without requiring
+    # Telegram provisioning profiles.
+
     disable_provisioning_profiles = getattr(
         arguments,
         'disableProvisioningProfiles',
@@ -525,7 +536,10 @@ def resolve_configuration(base_path, bazel_command_line: BazelCommandLine, argum
     )
 
     if disable_provisioning_profiles:
-        print('TelegramBuild: provisioning profiles disabled; skipping codesigning resolution')
+        print(
+            'TelegramBuild: provisioning profiles disabled; '
+            'skipping codesigning resolution'
+        )
 
         codesigning_data = ResolvedCodesigningData(
             aps_environment='',
@@ -541,26 +555,36 @@ def resolve_configuration(base_path, bazel_command_line: BazelCommandLine, argum
         )
 
         if codesigning_data.aps_environment is None:
-            print('Could not find a valid aps-environment entitlement in the provided provisioning profiles')
+            print(
+                'Could not find a valid aps-environment entitlement '
+                'in the provided provisioning profiles'
+            )
             sys.exit(1)
 
     if bazel_command_line is not None:
         build_configuration.write_to_variables_file(
             bazel_path=bazel_command_line.bazel,
-            use_xcode_managed_codesigning=codesigning_data.use_xcode_managed_codesigning,
+            use_xcode_managed_codesigning=(
+                codesigning_data.use_xcode_managed_codesigning
+            ),
             aps_environment=codesigning_data.aps_environment,
             path=configuration_repository_path + '/variables.bzl'
         )
 
     provisioning_profile_files = []
+
     for file_name in os.listdir(provisioning_path):
         if file_name.endswith('.mobileprovision'):
             provisioning_profile_files.append(file_name)
 
     with open(provisioning_path + '/BUILD', 'w+') as file:
         file.write('exports_files([\n')
+
         for file_name in provisioning_profile_files:
-            file.write('    "{}",\n'.format(file_name))
+            file.write(
+                '    "{}",\n'.format(file_name)
+            )
+
         file.write('])\n')
 
 
