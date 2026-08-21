@@ -3,7 +3,7 @@ import SGSimpleSettings
 import SGSettingsUI
 import SGStrings
 import CountrySelectionUI
-import Foundation
+import Foundation 
 import UIKit
 import Display
 import AccountContext
@@ -21,6 +21,7 @@ import WebUI
 import AvatarNode
 import PeerNameColorItem
 import BoostLevelIconComponent
+import Biogram
 
 private let enabledPublicBioEntities: EnabledEntityTypes = [.allUrl, .mention, .hashtag]
 private let enabledPrivateBioEntities: EnabledEntityTypes = [.allUrl, .mention, .hashtag] // MARK: Swiftgram
@@ -171,6 +172,28 @@ func infoItems(
                 }
             ))
         }
+        // === Biogram: локальные виртуальные номера ===
+if isMyProfile {
+    let localNumbers = BiogramManager.shared.virtualNumbers()
+    for (index, localNumber) in localNumbers.enumerated() {
+        items[currentPeerInfoSection]!.append(
+            PeerInfoScreenLabeledValueItem(
+                id: ItemPhoneNumber + 100 + index,
+                label: "Анонимный номер",
+                text: localNumber.number,
+                textColor: .accent,
+                action: { _, _ in },
+                longTapAction: nil,
+                contextAction: nil,
+                requestLayout: { animated in
+                    interaction.requestLayout(animated)
+                }
+            )
+        )
+    }
+}
+
+
         
         if let phone = user.phone, !(SGSimpleSettings.shared.hidePhoneInSettings && isMyProfile) {
             let formattedPhone = formatPhoneNumber(context: context, number: phone)
@@ -188,12 +211,26 @@ func infoItems(
                 interaction.requestLayout(animated)
             }))
         }
+        
         if let mainUsername = user.addressName {
-            var additionalUsernames: String?
-            let usernames = user.usernames.filter { $0.isActive && $0.username != mainUsername }
-            if !usernames.isEmpty {
-                additionalUsernames = presentationData.strings.Profile_AdditionalUsernames(String(usernames.map { "@\($0.username)" }.joined(separator: ", "))).string
+    var additionalUsernames: String?
+    
+    let usernames = user.usernames.filter { $0.isActive && $0.username != mainUsername }
+    var allAdditional: [String] = usernames.map { "@\($0.username)" }
+    
+    // Biogram aliases
+    if isMyProfile {
+        let localAliases = BiogramManager.shared.aliases()
+        for alias in localAliases {
+            if alias != mainUsername && !allAdditional.contains("@\(alias)") {
+                allAdditional.append("@\(alias)")
             }
+        }
+    }
+    
+    if !allAdditional.isEmpty {
+        additionalUsernames = presentationData.strings.Profile_AdditionalUsernames(String(allAdditional.joined(separator: ", "))).string
+    }
             
             items[currentPeerInfoSection]!.append(
                 PeerInfoScreenLabeledValueItem(
@@ -227,7 +264,23 @@ func infoItems(
                 let isBirthdayToday = hasBirthdayToday(birthday: birthday)
                 
                 var birthdayAction: ((ASDisplayNode, Promise<Bool>?) -> Void)?
-                if isMyProfile {
+                
+        // === Biogram: локальные collectibles ===
+if isMyProfile {
+    let collectibles = BiogramManager.shared.collectibles()
+    for (index, item) in collectibles.enumerated() {
+        items[currentPeerInfoSection]!.append(
+            PeerInfoScreenLabeledValueItem(
+                id: 9500 + index,
+                label: "Collectible",
+                text: item.title.isEmpty ? item.id : item.title,
+                textColor: .primary,
+                action: nil,
+                requestLayout: { _ in }
+            )
+        )
+    }
+}
                     birthdayAction = { node, _ in
                         birthdayContextAction(node, nil, nil)
                     }
@@ -2000,10 +2053,10 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
     }
     
     var result: [(AnyHashable, [PeerInfoScreenItem])] = []
-    for section in Section.allCases {
+    for section in InfoSection.allCases {
         if let sectionItems = items[section], !sectionItems.isEmpty {
             result.append((section, sectionItems))
         }
     }
     return result
-}
+} 
