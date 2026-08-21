@@ -1063,7 +1063,8 @@ if __name__ == '__main__':
         metavar='target_name'
     )
 
-    buildParser = subparsers.add_parser('build', help='Build the app')
+        buildParser = subparsers.add_parser('build', help='Build the app')
+
     buildParser.add_argument(
         '--buildNumber',
         required=True,
@@ -1071,7 +1072,20 @@ if __name__ == '__main__':
         help='Build number.',
         metavar='number'
     )
+
     add_project_and_build_common_arguments(buildParser)
+
+    buildParser.add_argument(
+        '--disableProvisioningProfiles',
+        action='store_true',
+        default=False,
+        help='''
+            Build without requiring provisioning profiles.
+            The resulting IPA is intended to be re-signed externally,
+            for example with Sideloadly.
+            '''
+    )
+
     buildParser.add_argument(
         '--configuration',
         choices=[
