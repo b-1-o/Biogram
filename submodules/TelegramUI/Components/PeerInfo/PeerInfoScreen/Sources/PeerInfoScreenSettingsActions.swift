@@ -206,6 +206,8 @@ extension PeerInfoScreenNode {
             self.openFaq()
         case .tips:
             self.openTips()
+        case .biogram:                    // ← вот сюда
+    break    
         case .phoneNumber:
             guard let controller = self.controller, !controller.presentAccountFrozenInfoIfNeeded() else {
                 return
