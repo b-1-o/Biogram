@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-26
+    runs-on: macos-13
 
     steps:
 
@@ -40,11 +40,9 @@ jobs:
           sudo xcode-select -s \
             "/Applications/Xcode_${XCODE_VERSION}.app/Contents/Developer"
 
-          echo
-          echo "Xcode:"
+          echo "Xcode version:"
           xcodebuild -version
 
-          echo
           echo "Developer directory:"
           xcode-select -p
 
@@ -72,16 +70,14 @@ jobs:
           echo "Source directory:"
           pwd
 
-          echo
-          echo "Git branch:"
+          echo "Branch:"
           git branch --show-current
 
-          echo
-          echo "Git commit:"
+          echo "Commit:"
           git rev-parse HEAD
 
       # ============================================================
-      # ENVIRONMENT
+      # BUILD ENVIRONMENT
       # ============================================================
 
       - name: Prepare build environment
@@ -94,7 +90,6 @@ jobs:
           echo "Biogram build environment"
           echo "========================================"
 
-          echo
           echo "Python:"
           python3 --version
 
@@ -118,10 +113,10 @@ jobs:
           echo "========================================"
 
       # ============================================================
-      # FAKE CODE SIGNING CERTIFICATE
+      # FAKE CODE SIGNING
       # ============================================================
 
-      - name: Prepare fake codesigning certificate
+      - name: Prepare fake codesigning
         run: |
           set -euo pipefail
 
@@ -134,7 +129,8 @@ jobs:
             --path build-system/fake-codesigning/certs
 
           echo
-          echo "Installed identities:"
+          echo "Available signing identities:"
+
           security find-identity \
             -v \
             -p codesigning || true
@@ -158,14 +154,18 @@ jobs:
 
           echo
           echo "Generated profiles:"
-          ls -lah \
-            build-system/fake-codesigning/profiles
+
+          find \
+            build-system/fake-codesigning/profiles \
+            -maxdepth 1 \
+            -type f \
+            -print
 
       # ============================================================
-      # VERIFY PROVISIONING PROFILES
+      # VERIFY TELEGRAM PROFILE
       # ============================================================
 
-      - name: Verify Biogram provisioning profiles
+      - name: Verify Telegram provisioning profile
         run: |
           set -euo pipefail
 
@@ -174,12 +174,12 @@ jobs:
           PROFILE="build-system/fake-codesigning/profiles/Telegram.mobileprovision"
 
           if [ ! -f "$PROFILE" ]; then
-            echo "ERROR: Telegram.mobileprovision was not generated."
+            echo "ERROR: Telegram.mobileprovision does not exist."
             exit 1
           fi
 
           echo "========================================"
-          echo "Telegram provisioning profile"
+          echo "Verifying Telegram.mobileprovision"
           echo "========================================"
 
           security cms \
@@ -197,23 +197,27 @@ jobs:
 
           entitlements = profile.get("Entitlements", {})
 
-          print("Name:")
+          print("Profile name:")
           print(profile.get("Name"))
 
           print()
-          print("Team:")
+          print("Team identifier:")
           print(profile.get("TeamIdentifier"))
 
           print()
-          print("Application Identifier:")
+          print("Application identifier:")
           print(entitlements.get("application-identifier"))
 
           print()
-          print("Team Identifier:")
-          print(entitlements.get("com.apple.developer.team-identifier"))
+          print("Developer team identifier:")
+          print(
+              entitlements.get(
+                  "com.apple.developer.team-identifier"
+              )
+          )
 
           print()
-          print("APS Environment:")
+          print("APS environment:")
           print(entitlements.get("aps-environment"))
 
           if entitlements.get("aps-environment") != "production":
@@ -221,18 +225,26 @@ jobs:
                   "ERROR: aps-environment is not production"
               )
 
-          expected = (
+          expected_app_id = (
               "FAKE123456."
               "org.28d7790dd5d2e37c.Swiftgram"
           )
 
-          if entitlements.get("application-identifier") != expected:
+          actual_app_id = entitlements.get(
+              "application-identifier"
+          )
+
+          if actual_app_id != expected_app_id:
               raise SystemExit(
-                  "ERROR: application-identifier is incorrect"
+                  "ERROR: application-identifier is incorrect.\n"
+                  f"Expected: {expected_app_id}\n"
+                  f"Actual:   {actual_app_id}"
               )
 
           print()
+          print("========================================")
           print("Provisioning profile verification: OK")
+          print("========================================")
           PY
 
       # ============================================================
@@ -254,19 +266,10 @@ jobs:
 
           COMMIT_COUNT="$(git rev-list --count HEAD)"
 
-          BUILD_NUMBER="$(
-            (
-              COMMIT_COUNT + BUILD_NUMBER_OFFSET
-            )
-          )"
-
-          # Bash arithmetic above intentionally replaced below
-          # with the reliable arithmetic form.
-
           BUILD_NUMBER="$((COMMIT_COUNT + BUILD_NUMBER_OFFSET))"
 
           if ! [[ "$BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
-            echo "ERROR: Invalid BUILD_NUMBER:"
+            echo "ERROR: Invalid build number:"
             echo "$BUILD_NUMBER"
             exit 1
           fi
@@ -275,7 +278,7 @@ jobs:
           echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
 
           echo "========================================"
-          echo "Biogram build"
+          echo "Starting Biogram build"
           echo "========================================"
           echo "App version:         $APP_VERSION"
           echo "Commit count:        $COMMIT_COUNT"
@@ -286,7 +289,7 @@ jobs:
           echo "========================================"
 
       # ============================================================
-      # BUILD
+      # BUILD BIOGRAM
       # ============================================================
 
       - name: Build Biogram
@@ -300,18 +303,14 @@ jobs:
           cd "$SOURCE_DIR"
 
           echo "========================================"
-          echo "Starting Biogram build"
+          echo "Building Biogram"
           echo "========================================"
 
           echo "App version:  $APP_VERSION"
           echo "Build number: $BUILD_NUMBER"
 
           echo
-          echo "Configuration:"
-          cat build-system/appstore-configuration.json
-
-          echo
-          echo "========================================"
+          echo "Running Make.py..."
 
           python3 -u \
             build-system/Make/Make.py \
@@ -330,14 +329,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          SOURCE_DIR="/Users/Shared/telegram-ios"
-
-          cd "$SOURCE_DIR"
+          cd /Users/Shared/telegram-ios
 
           OUTPUT_PATH="build/artifacts"
 
           rm -rf "$OUTPUT_PATH"
-
           mkdir -p "$OUTPUT_PATH"
 
           echo "Searching for IPA..."
@@ -352,10 +348,11 @@ jobs:
           )"
 
           if [ -z "$IPA_PATH" ]; then
-            echo "ERROR: No IPA found."
+            echo "ERROR: IPA was not found."
 
             echo
-            echo "All IPA files:"
+            echo "Searching entire repository:"
+
             find . \
               -type f \
               -name "*.ipa" \
@@ -373,12 +370,11 @@ jobs:
             "$OUTPUT_PATH/Biogram.ipa"
 
           echo
-          echo "IPA:"
-          ls -lh \
-            "$OUTPUT_PATH/Biogram.ipa"
+          echo "Biogram IPA:"
+          ls -lh "$OUTPUT_PATH/Biogram.ipa"
 
       # ============================================================
-      # COLLECT DSYM
+      # COLLECT DSYMS
       # ============================================================
 
       - name: Collect dSYMs
@@ -390,7 +386,6 @@ jobs:
           OUTPUT_PATH="build/artifacts"
 
           rm -rf build/DSYMs
-
           mkdir -p build/DSYMs
 
           find bazel-out \
@@ -407,7 +402,10 @@ jobs:
 
             zip -r \
               "$OUTPUT_PATH/Biogram.DSYMs.zip" \
-              build/DSYMs
+              build/DSYMs \
+              >/dev/null
+
+            echo "dSYM archive created."
 
           else
 
@@ -416,7 +414,7 @@ jobs:
           fi
 
           echo
-          echo "Artifacts:"
+          echo "Final artifacts:"
           ls -lah "$OUTPUT_PATH"
 
       # ============================================================
@@ -460,8 +458,9 @@ jobs:
             Commit: ${{ github.sha }}
             Branch: ${{ github.ref_name }}
 
-            This IPA is intended to be re-signed with Sideloadly
-            or another compatible sideloading tool.
+            This IPA is intended for sideloading
+            with Sideloadly or another compatible
+            signing tool.
 
           draft: false
           prerelease: true
