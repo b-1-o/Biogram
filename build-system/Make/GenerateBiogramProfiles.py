@@ -2,106 +2,112 @@ import os
 import plistlib
 import subprocess
 import tempfile
-import shutil
+
 
 SOURCE = "build-system/fake-codesigning/profiles"
-DEST = "build-system/fake-codesigning/biogram-profiles"
+DEST = "build-system/fake-codesigning/profiles"
 
-TEAM_ID = "C67CF9S4VU"
+TEAM_ID = "FAKE123456"
 BUNDLE_ID = "org.28d7790dd5d2e37c.Swiftgram"
 
-os.makedirs(DEST, exist_ok=True)
-
-mapping = {
-    "Telegram.mobileprovision": "Telegram.mobileprovision",
-    "NotificationService.mobileprovision": "NotificationService.mobileprovision",
-    "NotificationContent.mobileprovision": "NotificationContent.mobileprovision",
-    "Share.mobileprovision": "Share.mobileprovision",
-    "Intents.mobileprovision": "Intents.mobileprovision",
-    "Widget.mobileprovision": "Widget.mobileprovision",
-    "BroadcastUpload.mobileprovision": "BroadcastUpload.mobileprovision",
-    "WatchApp.mobileprovision": "WatchApp.mobileprovision",
-    "WatchExtension.mobileprovision": "WatchExtension.mobileprovision",
+PROFILE_MAPPING = {
+    "Telegram.mobileprovision": "",
+    "NotificationService.mobileprovision": ".NotificationService",
+    "NotificationContent.mobileprovision": ".NotificationContent",
+    "Share.mobileprovision": ".Share",
+    "Intents.mobileprovision": ".SiriIntents",
+    "Widget.mobileprovision": ".Widget",
+    "BroadcastUpload.mobileprovision": ".BroadcastUpload",
+    "WatchApp.mobileprovision": ".watchkitapp",
+    "WatchExtension.mobileprovision": ".watchkitapp.watchkitextension",
 }
 
-for filename, output_name in mapping.items():
+
+def decode_profile(path):
+    data = subprocess.check_output(["security", "cms", "-D", "-i", path])
+    return plistlib.loads(data)
+
+
+def encode_profile(profile, output):
+    temp = tempfile.NamedTemporaryFile(suffix=".plist", delete=False)
+    temp_path = temp.name
+    try:
+        with open(temp_path, "wb") as f:
+            plistlib.dump(profile, f)
+        subprocess.run(
+            [
+                "security", "cms", "-S",
+                "-N", "SelfSigned",
+                "-i", temp_path,
+                "-o", output,
+            ],
+            check=True,
+        )
+    finally:
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
+
+
+def process_profile(filename, suffix):
     source = os.path.join(SOURCE, filename)
-    output = os.path.join(DEST, output_name)
+    output = os.path.join(DEST, filename)
 
     if not os.path.exists(source):
-        print("Skipping missing:", source)
-        continue
+        raise RuntimeError("Missing provisioning profile: {}".format(source))
 
     print("Processing:", filename)
+    profile = decode_profile(source)
+    entitlements = profile.setdefault("Entitlements", {})
 
-    raw = subprocess.check_output([
-        "security", "cms", "-D", "-i", source
-    ])
+    profile_bundle_id = BUNDLE_ID + suffix
+    app_id = TEAM_ID + "." + profile_bundle_id
 
-    profile = plistlib.loads(raw)
+    entitlements["application-identifier"] = app_id
+    entitlements["com.apple.developer.team-identifier"] = TEAM_ID
 
-    ent = profile["Entitlements"]
-
-    if filename == "Telegram.mobileprovision":
-        profile_bundle = BUNDLE_ID
-    elif filename == "NotificationService.mobileprovision":
-        profile_bundle = BUNDLE_ID + ".NotificationService"
-    elif filename == "NotificationContent.mobileprovision":
-        profile_bundle = BUNDLE_ID + ".NotificationContent"
-    elif filename == "Share.mobileprovision":
-        profile_bundle = BUNDLE_ID + ".Share"
-    elif filename == "Intents.mobileprovision":
-        profile_bundle = BUNDLE_ID + ".SiriIntents"
-    elif filename == "Widget.mobileprovision":
-        profile_bundle = BUNDLE_ID + ".Widget"
-    elif filename == "BroadcastUpload.mobileprovision":
-        profile_bundle = BUNDLE_ID + ".BroadcastUpload"
-    elif filename == "WatchApp.mobileprovision":
-        profile_bundle = BUNDLE_ID + ".watchkitapp"
-    elif filename == "WatchExtension.mobileprovision":
-        profile_bundle = BUNDLE_ID + ".watchkitapp.watchkitextension"
-    else:
-        profile_bundle = BUNDLE_ID
-
-    ent["application-identifier"] = TEAM_ID + "." + profile_bundle
-    ent["com.apple.developer.team-identifier"] = TEAM_ID
+    # application groups, if present — rewrite to match new bundle id
+    if "com.apple.security.application-groups" in entitlements:
+        groups = entitlements["com.apple.security.application-groups"]
+        if isinstance(groups, list):
+            entitlements["com.apple.security.application-groups"] = [
+                "group." + profile_bundle_id if "telegra" in g.lower() or "telegraph" in g.lower() or "telegram" in g.lower()
+                else g
+                for g in groups
+            ]
 
     if filename == "Telegram.mobileprovision":
-        ent["aps-environment"] = "production"
+        entitlements["aps-environment"] = "production"
 
-    profile["Entitlements"] = ent
-
-    # Make profile match fake signing identity
-    if "ApplicationIdentifierPrefix" in profile:
-        profile["ApplicationIdentifierPrefix"] = [TEAM_ID + "."]
-
-    # Remove original signature before re-signing
+    profile["Entitlements"] = entitlements
+    profile["ApplicationIdentifierPrefix"] = [TEAM_ID]
+    profile["TeamIdentifier"] = [TEAM_ID]
+    profile["TeamName"] = "Fake Team"
     profile.pop("DER-Encoded-Profile", None)
 
-    temp = tempfile.mktemp(suffix=".plist")
+    encode_profile(profile, output)
 
-    with open(temp, "wb") as f:
-        plistlib.dump(profile, f)
+    print("  application-identifier:", app_id)
+    if "aps-environment" in entitlements:
+        print("  aps-environment:", entitlements["aps-environment"])
 
-    subprocess.run([
-        "security",
-        "cms",
-        "-S",
-        "-N",
-        "SelfSigned",
-        "-i",
-        temp,
-        "-o",
-        output
-    ], check=True)
 
-    os.unlink(temp)
+def main():
+    if not os.path.isdir(SOURCE):
+        raise RuntimeError("Missing directory: {}".format(SOURCE))
 
-    print("Created:", output)
+    print("========================================")
+    print("Generating Biogram fake provisioning profiles")
+    print("TEAM_ID:", TEAM_ID)
+    print("BUNDLE_ID:", BUNDLE_ID)
+    print("========================================")
 
-print("")
-print("========================================")
-print("Biogram fake provisioning profiles ready")
-print("TEAM_ID:", TEAM_ID)
-print("BUNDLE_ID:", BUNDLE_ID)
-print("========================================")
+    for filename, suffix in PROFILE_MAPPING.items():
+        process_profile(filename, suffix)
+
+    print("========================================")
+    print("Done")
+    print("========================================")
+
+
+if __name__ == "__main__":
+    main()
