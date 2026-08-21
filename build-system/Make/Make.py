@@ -506,8 +506,10 @@ def resolve_configuration(base_path, bazel_command_line: BazelCommandLine, argum
         pass
 
     provisioning_path = '{}/provisioning'.format(configuration_repository_path)
+
     if os.path.exists(provisioning_path):
         shutil.rmtree(provisioning_path)
+
     os.makedirs(provisioning_path, exist_ok=True)
 
     codesigning_data = resolve_codesigning(
@@ -517,22 +519,54 @@ def resolve_configuration(base_path, bazel_command_line: BazelCommandLine, argum
         provisioning_profiles_path=provisioning_path,
         additional_codesigning_output_path=additional_codesigning_output_path
     )
+
+    #
+    # Local / Sideloadly build:
+    #
+    # When --disableProvisioningProfiles is explicitly requested, the
+    # resulting application is intended to be signed later by Sideloadly.
+    #
+    # Therefore we must not require an Apple provisioning profile with
+    # an aps-environment entitlement at this stage.
+    #
     if codesigning_data.aps_environment is None:
-        print('Could not find a valid aps-environment entitlement in the provided provisioning profiles')
-        sys.exit(1)
+        if arguments.disableProvisioningProfiles:
+            print(
+                'TelegramBuild: no aps-environment entitlement found. '
+                'Continuing because --disableProvisioningProfiles is enabled.'
+            )
+
+            codesigning_data = ResolvedCodesigningData(
+                aps_environment='development',
+                use_xcode_managed_codesigning=codesigning_data.use_xcode_managed_codesigning
+            )
+        else:
+            print(
+                'Could not find a valid aps-environment entitlement '
+                'in the provided provisioning profiles'
+            )
+            sys.exit(1)
 
     if bazel_command_line is not None:
-        build_configuration.write_to_variables_file(bazel_path=bazel_command_line.bazel, use_xcode_managed_codesigning=codesigning_data.use_xcode_managed_codesigning, aps_environment=codesigning_data.aps_environment, path=configuration_repository_path + '/variables.bzl')
+        build_configuration.write_to_variables_file(
+            bazel_path=bazel_command_line.bazel,
+            use_xcode_managed_codesigning=codesigning_data.use_xcode_managed_codesigning,
+            aps_environment=codesigning_data.aps_environment,
+            path=configuration_repository_path + '/variables.bzl'
+        )
 
     provisioning_profile_files = []
+
     for file_name in os.listdir(provisioning_path):
         if file_name.endswith('.mobileprovision'):
             provisioning_profile_files.append(file_name)
 
     with open(provisioning_path + '/BUILD', 'w+') as file:
         file.write('exports_files([\n')
+
         for file_name in provisioning_profile_files:
             file.write('    "{}",\n'.format(file_name))
+
         file.write('])\n')
 
 
