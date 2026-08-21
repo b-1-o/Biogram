@@ -1,9 +1,6 @@
 name: CI
 
 on:
-  # push:
-  #   branches: [ master ]
-
   workflow_dispatch:
 
 jobs:
@@ -18,38 +15,84 @@ jobs:
 
       - name: Set active Xcode path
         run: |
-          XCODE_VERSION=$(cat versions.json | python3 -c 'import json,sys;obj=json.load(sys.stdin);print(obj["xcode"]);')
-          sudo xcode-select -s /Applications/Xcode_$XCODE_VERSION.app/Contents/Developer
+          XCODE_VERSION="$(cat versions.json | python3 -c 'import json,sys;obj=json.load(sys.stdin);print(obj["xcode"]);')"
+          sudo xcode-select -s "/Applications/Xcode_$XCODE_VERSION.app/Contents/Developer"
 
       - name: Create canonical source directory
         run: |
           set -x
+
           sudo mkdir -p /Users/Shared
-          cp -R $GITHUB_WORKSPACE /Users/Shared/
-          mv /Users/Shared/$(basename $GITHUB_WORKSPACE) /Users/Shared/telegram-ios
+          rm -rf /Users/Shared/telegram-ios
+
+          cp -R "$GITHUB_WORKSPACE" /Users/Shared/
+          mv "/Users/Shared/$(basename "$GITHUB_WORKSPACE")" /Users/Shared/telegram-ios
 
       - name: Build the App
         run: |
           set -x
 
-          # source code paths are included in the final binary, so we need to make them stable across builds
           SOURCE_DIR=/Users/Shared/telegram-ios
-
-          # use canonical bazel root
           BAZEL_USER_ROOT="/private/var/tmp/_bazel_containerhost"
 
-          cd $SOURCE_DIR
+          cd "$SOURCE_DIR"
+
+          echo "=== Repository ==="
+          git branch --show-current
+          git rev-parse HEAD
+
+          echo "=== Generate Biogram provisioning profiles ==="
+          python3 build-system/Make/GenerateBiogramProfiles.py
+
+          echo "=== Replace original provisioning profiles ==="
+          rm -rf build-system/fake-codesigning/profiles
+          mv build-system/fake-codesigning/biogram-profiles \
+             build-system/fake-codesigning/profiles
+
+          echo "=== Provisioning profiles ==="
+          find build-system/fake-codesigning/profiles \
+            -maxdepth 1 \
+            -type f \
+            -name "*.mobileprovision" \
+            -print
+
+          echo "=== Validate Telegram provisioning profile ==="
+          openssl smime \
+            -inform der \
+            -verify \
+            -in build-system/fake-codesigning/profiles/Telegram.mobileprovision \
+            -noverify \
+            -out /tmp/telegram_profile.plist
+
+          echo "=== Telegram application identifier ==="
+          grep -A 1 "application-identifier" /tmp/telegram_profile.plist || true
+
+          echo "=== Telegram APS environment ==="
+          grep -A 1 "aps-environment" /tmp/telegram_profile.plist || true
 
           BUILD_NUMBER_OFFSET="$(cat build_number_offset)"
 
-          export APP_VERSION=$(cat versions.json | python3 -c 'import json,sys;obj=json.load(sys.stdin);print(obj["app"]);')
-          export COMMIT_COUNT=$(git rev-list --count HEAD)
-          export COMMIT_COUNT="$(($COMMIT_COUNT+$BUILD_NUMBER_OFFSET))"
-          export BUILD_NUMBER="$COMMIT_COUNT"
-          echo "BUILD_NUMBER=$(echo $BUILD_NUMBER)" >> $GITHUB_ENV
-          echo "APP_VERSION=$(echo $APP_VERSION)" >> $GITHUB_ENV
+          export APP_VERSION="$(
+            cat versions.json |
+            python3 -c 'import json,sys;obj=json.load(sys.stdin);print(obj["app"]);'
+          )"
 
-          python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
+          export COMMIT_COUNT="$(git rev-list --count HEAD)"
+          export COMMIT_COUNT="$((COMMIT_COUNT + BUILD_NUMBER_OFFSET))"
+          export BUILD_NUMBER="$COMMIT_COUNT"
+
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
+          echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
+
+          echo "=== Build information ==="
+          echo "APP_VERSION=$APP_VERSION"
+          echo "BUILD_NUMBER=$BUILD_NUMBER"
+
+          echo "=== Import certificates ==="
+          python3 build-system/Make/ImportCertificates.py \
+            --path build-system/fake-codesigning/certs
+
+          echo "=== Build Telegram/Biogram ==="
           python3 -u build-system/Make/Make.py \
             --bazelUserRoot="$BAZEL_USER_ROOT" \
             build \
@@ -58,20 +101,33 @@ jobs:
             --configuration=release_arm64 \
             --buildNumber="$BUILD_NUMBER"
 
-          # collect ipa
+          echo "=== Collect IPA ==="
           OUTPUT_PATH="build/artifacts"
+
           rm -rf "$OUTPUT_PATH"
           mkdir -p "$OUTPUT_PATH"
+
           for f in bazel-out/applebin_ios-ios_arm*-opt-ST-*/bin/Telegram/Telegram.ipa; do
-            cp "$f" $OUTPUT_PATH/
+            if [ -f "$f" ]; then
+              cp "$f" "$OUTPUT_PATH/"
+            fi
           done
 
-          # collect dsym
+          echo "=== Collect dSYM ==="
           mkdir -p build/DSYMs
+
           for f in bazel-out/applebin_ios-ios_arm*-opt-ST-*/bin/Telegram/*.dSYM; do
-            cp -R "$f" build/DSYMs/
+            if [ -d "$f" ]; then
+              cp -R "$f" build/DSYMs/
+            fi
           done
-          zip -r "./$OUTPUT_PATH/Telegram.DSYMs.zip" build/DSYMs 1>/dev/null
+
+          zip -r "./$OUTPUT_PATH/Telegram.DSYMs.zip" \
+            build/DSYMs \
+            1>/dev/null
+
+          echo "=== Build artifacts ==="
+          find "$OUTPUT_PATH" -maxdepth 2 -type f -print
 
       - name: Create Release
         id: create_release
@@ -87,7 +143,7 @@ jobs:
           prerelease: false
 
       - name: Upload Release IPA
-        id: upload-release-ipa 
+        id: upload-release-ipa
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -98,7 +154,7 @@ jobs:
           asset_content_type: application/zip
 
       - name: Upload Release DSYM
-        id: upload-release-dsym 
+        id: upload-release-dsym
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
