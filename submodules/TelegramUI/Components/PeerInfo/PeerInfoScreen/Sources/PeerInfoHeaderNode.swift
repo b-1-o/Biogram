@@ -570,18 +570,32 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 }
             }
             hasBackground = true
-        } else if let peer {
-            backgroundCoverSubject = .peer(peer)
-if peer.effectiveProfileColor != nil {
+} else if let peer {
+            // Biogram: свой цвет профиля → градиент
+            if self.isMyProfile,
+               BiogramManager.shared.profileColorEnabled,
+               let bc = BiogramManager.shared.profileColor {
+                
+                let brightness = CGFloat(max(0.3, min(1.2, bc.brightness)))
+                let mainColor = UIColor(
+                    red: min(1.0, CGFloat(bc.r) * brightness),
+                    green: min(1.0, CGFloat(bc.g) * brightness),
+                    blue: min(1.0, CGFloat(bc.b) * brightness),
+                    alpha: 1.0
+                )
+                let secondaryColor = mainColor.withMultiplied(hue: 1.0, saturation: 1.15, brightness: 0.75)
+                
+                backgroundCoverSubject = .custom(mainColor, secondaryColor, nil, nil)
                 hasBackground = true
-            }
-            // Biogram
-            if self.isMyProfile, BiogramManager.shared.profileColorEnabled, BiogramManager.shared.profileColor != nil {
-                hasBackground = true
+            } else {
+                backgroundCoverSubject = .peer(peer)
+                if peer.effectiveProfileColor != nil {
+                    hasBackground = true
+                }
             }
         } else {
             backgroundCoverSubject = nil
-        }                                          
+        }                               
         var currentSavedMusic: TelegramMediaFile?
         if let peer, peer.id != self.context.account.peerId || self.isMyProfile, let screenData {
             if let savedMusicState = screenData.savedMusicState {
