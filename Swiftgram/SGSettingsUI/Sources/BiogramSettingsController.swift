@@ -434,14 +434,11 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
             }
             updateState()
         },
-        addNumber: {
+addNumber: {
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-            var dismissImpl: (() -> Void)?
-            let controller = promptController(
-                sharedContext: context.sharedContext,
-                updatedPresentationData: (context.sharedContext.currentPresentationData.with { $0 }, context.sharedContext.presentationData),
-                text: "Virtual / anonymous number",
+            let controller = biogramPrompt(
                 title: "Enter number",
+                text: "Virtual / anonymous number",
                 value: "+888 ",
                 placeholder: "+888 00001212",
                 actionTitle: presentationData.strings.Common_Done,
@@ -454,14 +451,16 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
                         Queue.mainQueue().async { updateState() }
                     }
                     updateState()
-                    dismissImpl?()
                     return true
                 }
+            )
+            presentControllerImpl?(controller, nil)
+        },
             )
             dismissImpl = { [weak controller] in controller?.dismiss() }
             presentControllerImpl?(controller, nil)
         },
-        editOrRemoveNumber: { number in
+editOrRemoveNumber: { number in
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
             let alert = textAlertController(
                 context: context,
@@ -470,12 +469,9 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
                 actions: [
                     TextAlertAction(type: .genericAction, title: "Cancel", action: {}),
                     TextAlertAction(type: .defaultAction, title: "Edit", action: {
-                        var dismissImpl: (() -> Void)?
-                        let editCtrl = promptController(
-                            sharedContext: context.sharedContext,
-                            updatedPresentationData: nil,
-                            text: "Edit number",
+                        let editCtrl = biogramPrompt(
                             title: "Number",
+                            text: "Edit number",
                             value: number.number,
                             placeholder: "+888 ...",
                             actionTitle: presentationData.strings.Common_Done,
@@ -487,11 +483,9 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
                                     Queue.mainQueue().async { updateState() }
                                 }
                                 updateState()
-                                dismissImpl?()
                                 return true
                             }
                         )
-                        dismissImpl = { [weak editCtrl] in editCtrl?.dismiss() }
                         presentControllerImpl?(editCtrl, nil)
                     }),
                     TextAlertAction(type: .destructiveAction, title: "Delete", action: {
@@ -590,13 +584,45 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
             }
             updateState()
         },
-        setBrightness: { value in
+                setBrightness: { value in
             guard var color = BiogramManager.shared.profileColor else { return }
             color.brightness = value
             BiogramManager.shared.setProfileColor(color, enabled: true) {
                 Queue.mainQueue().async { updateState() }
             }
             updateState()
+        },
+        pickBrightness: {
+            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+            let steps: [(String, Double)] = [
+                ("30%", 0.3),
+                ("50%", 0.5),
+                ("70%", 0.7),
+                ("85%", 0.85),
+                ("100%", 1.0),
+                ("115%", 1.15),
+                ("120%", 1.2)
+            ]
+            var actions: [TextAlertAction] = [
+                TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {})
+            ]
+            for (title, value) in steps {
+                actions.append(TextAlertAction(type: .defaultAction, title: title, action: {
+                    guard var color = BiogramManager.shared.profileColor else { return }
+                    color.brightness = value
+                    BiogramManager.shared.setProfileColor(color, enabled: true) {
+                        Queue.mainQueue().async { updateState() }
+                    }
+                    updateState()
+                }))
+            }
+            let alert = textAlertController(
+                context: context,
+                title: "Brightness",
+                text: "Choose shade intensity",
+                actions: actions
+            )
+            presentControllerImpl?(alert, nil)
         },
         removeCollectible: { id in
             BiogramManager.shared.removeCollectible(id: id) {
@@ -632,7 +658,6 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
             presentControllerImpl?(alert, nil)
         }
     )
-    
     let signal = combineLatest(
         queue: .mainQueue(),
         context.sharedContext.presentationData,
