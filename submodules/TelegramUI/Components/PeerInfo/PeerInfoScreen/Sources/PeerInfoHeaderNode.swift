@@ -44,6 +44,7 @@ import PlainButtonComponent
 import BundleIconComponent
 import MarqueeComponent
 import EdgeEffect
+import Biogram
 
 final class PeerInfoHeaderNavigationTransition {
     let sourceNavigationBar: NavigationBar
@@ -571,13 +572,16 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             hasBackground = true
         } else if let peer {
             backgroundCoverSubject = .peer(peer)
-            if peer.effectiveProfileColor != nil {
+if peer.effectiveProfileColor != nil {
+                hasBackground = true
+            }
+            // Biogram
+            if self.isMyProfile, BiogramManager.shared.profileColorEnabled, BiogramManager.shared.profileColor != nil {
                 hasBackground = true
             }
         } else {
             backgroundCoverSubject = nil
-        }
-        
+        }                                          
         var currentSavedMusic: TelegramMediaFile?
         if let peer, peer.id != self.context.account.peerId || self.isMyProfile, let screenData {
             if let savedMusicState = screenData.savedMusicState {
@@ -646,11 +650,12 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         
         let avatarFrame = CGRect(origin: CGPoint(x: floor((width - avatarSize) / 2.0), y: statusBarHeight + 22.0), size: CGSize(width: avatarSize, height: avatarSize))
         
-        let regularNavigationContentsAccentColor: UIColor = peer?.effectiveProfileColor != nil ? .white : presentationData.theme.list.itemAccentColor
+        let biogramColorActive = self.isMyProfile && BiogramManager.shared.profileColorEnabled && BiogramManager.shared.profileColor != nil
+        let regularNavigationContentsAccentColor: UIColor = (peer?.effectiveProfileColor != nil || biogramColorActive) ? .white : presentationData.theme.list.itemAccentColor
         let collapsedHeaderNavigationContentsAccentColor = presentationData.theme.list.itemAccentColor
         let expandedAvatarNavigationContentsAccentColor: UIColor = .white
         
-        let regularNavigationContentsPrimaryColor: UIColor = peer?.effectiveProfileColor != nil ? .white : presentationData.theme.list.itemPrimaryTextColor
+        let regularNavigationContentsPrimaryColor: UIColor = (peer?.effectiveProfileColor != nil || biogramColorActive) ? .white : presentationData.theme.list.itemPrimaryTextColor
         let collapsedHeaderNavigationContentsPrimaryColor = presentationData.theme.list.itemPrimaryTextColor
         let expandedAvatarNavigationContentsPrimaryColor: UIColor = .white
         
@@ -662,7 +667,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         let collapsedHeaderButtonBackgroundColor: UIColor = .clear
         let expandedAvatarHeaderButtonBackgroundColor: UIColor = UIColor(white: 0.0, alpha: 0.5)
         
-        let regularContentButtonForegroundColor: UIColor = peer?.effectiveProfileColor != nil ? UIColor.white : presentationData.theme.list.itemAccentColor
+        let regularContentButtonForegroundColor: UIColor = (peer?.effectiveProfileColor != nil || biogramColorActive) ? UIColor.white : presentationData.theme.list.itemAccentColor
         let collapsedHeaderContentButtonForegroundColor = presentationData.theme.list.itemAccentColor
         let expandedAvatarContentButtonForegroundColor: UIColor = .white
         
@@ -683,6 +688,28 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             regularHeaderButtonBackgroundColor = baseButtonBackgroundColor.blendOver(background: secondaryColor.mixedWith(mainColor, alpha: 0.1))
             
             hasCoverColor = true
+        } else if self.isMyProfile, BiogramManager.shared.profileColorEnabled, let bc = BiogramManager.shared.profileColor {
+            let brightness = CGFloat(max(0.3, min(1.2, bc.brightness)))
+            let mainColor = UIColor(
+                red: min(1.0, CGFloat(bc.r) * brightness),
+                green: min(1.0, CGFloat(bc.g) * brightness),
+                blue: min(1.0, CGFloat(bc.b) * brightness),
+                alpha: 1.0
+            )
+            regularNavigationContentsSecondaryColor = UIColor(white: 1.0, alpha: 0.6).blitOver(mainColor.withMultiplied(hue: 1.0, saturation: 2.2, brightness: 1.5), alpha: 1.0)
+            
+            let baseButtonBackgroundColor: UIColor
+            if presentationData.theme.overallDarkAppearance {
+                baseButtonBackgroundColor = UIColor(white: 0.0, alpha: 0.25)
+            } else {
+                baseButtonBackgroundColor = UIColor(white: 1.0, alpha: 0.25)
+            }
+            regularContentButtonBackgroundColor = baseButtonBackgroundColor.blendOver(background: mainColor)
+            regularHeaderButtonBackgroundColor = baseButtonBackgroundColor.blendOver(background: mainColor)
+            
+            hasCoverColor = true
+            self.backgroundBannerView.backgroundColor = mainColor
+            
         } else if let profileColor = peer?.effectiveProfileColor {
             let backgroundColors = self.context.peerNameColors.getProfile(profileColor, dark: presentationData.theme.overallDarkAppearance)
             regularNavigationContentsSecondaryColor = UIColor(white: 1.0, alpha: 0.6).blitOver(backgroundColors.main.withMultiplied(hue: 1.0, saturation: 2.2, brightness: 1.5), alpha: 1.0)
