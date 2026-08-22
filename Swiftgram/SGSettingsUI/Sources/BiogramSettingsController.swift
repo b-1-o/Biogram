@@ -9,6 +9,101 @@ import AccountContext
 import PresentationDataUtils
 import Biogram
 
+private final class BiogramTextInputController: ViewController {
+    private let titleText: String
+    private let messageText: String
+    private let initialValue: String
+    private let placeholder: String
+    private let actionTitle: String
+    private let cancelTitle: String
+    private let onAction: (String) -> Bool
+    
+    private var textField: UITextField?
+    
+    init(
+        title: String,
+        text: String,
+        value: String,
+        placeholder: String,
+        actionTitle: String,
+        cancelTitle: String,
+        action: @escaping (String) -> Bool
+    ) {
+        self.titleText = title
+        self.messageText = text
+        self.initialValue = value
+        self.placeholder = placeholder
+        self.actionTitle = actionTitle
+        self.cancelTitle = cancelTitle
+        self.onAction = action
+        super.init(navigationBarPresentationData: nil)
+        self.statusBar.statusBarStyle = .Ignore
+    }
+    
+    required init(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    override func loadDisplayNode() {
+        self.displayNode = ASDisplayNode()
+        self.displayNode.backgroundColor = UIColor.black.withAlphaComponent(0.4)
+        
+        let alert = UIAlertController(title: titleText, message: messageText, preferredStyle: .alert)
+        alert.addTextField { [weak self] tf in
+            guard let self = self else { return }
+            tf.text = self.initialValue
+            tf.placeholder = self.placeholder
+            tf.keyboardType = .default
+            tf.autocapitalizationType = .none
+            tf.autocorrectionType = .no
+            self.textField = tf
+        }
+        alert.addAction(UIAlertAction(title: cancelTitle, style: .cancel, handler: { [weak self] _ in
+            self?.close()
+        }))
+        alert.addAction(UIAlertAction(title: actionTitle, style: .default, handler: { [weak self] _ in
+            guard let self = self else { return }
+            let value = self.textField?.text ?? ""
+            if self.onAction(value) {
+                self.close()
+            }
+        }))
+        
+        Queue.mainQueue().after(0.05) { [weak self] in
+            guard let self = self else { return }
+            if let root = self.view.window?.rootViewController {
+                var top: UIViewController = root
+                while let p = top.presentedViewController { top = p }
+                top.present(alert, animated: true)
+            }
+        }
+    }
+    
+    private func close() {
+        self.dismiss(animated: false)
+    }
+}
+
+private func biogramPrompt(
+    title: String,
+    text: String,
+    value: String,
+    placeholder: String,
+    actionTitle: String,
+    cancelTitle: String,
+    action: @escaping (String) -> Bool
+) -> ViewController {
+    return BiogramTextInputController(
+        title: title,
+        text: text,
+        value: value,
+        placeholder: placeholder,
+        actionTitle: actionTitle,
+        cancelTitle: cancelTitle,
+        action: action
+    )
+}
+
 private enum BiogramSection: Int32 {
     case premium = 0
     case numbers = 1
@@ -216,9 +311,9 @@ private enum BiogramEntry: ItemListNodeEntry {
                 arguments.selectPreset(color)
             })
         case let .colorBrightness(value):
-            // Если ItemListSliderItem не скомпилируется — просто закомментируй эту строку
-            return ItemListSliderItem(presentationData: presentationData, title: "Brightness", value: value, minValue: 0.3, maxValue: 1.2, sectionId: self.section, style: .blocks, updated: { newValue in
-                arguments.setBrightness(newValue)
+            let percent = Int((value * 100.0).rounded())
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Brightness", label: "\(percent)%", sectionId: self.section, style: .blocks, action: {
+                arguments.pickBrightness()
             })
         case .collectiblesHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "COLLECTIBLES / GIFTS", sectionId: self.section)
@@ -245,10 +340,11 @@ private final class BiogramArguments {
     let toggleColor: (Bool) -> Void
     let selectPreset: (BiogramProfileColor) -> Void
     let setBrightness: (Double) -> Void
+    let pickBrightness: () -> Void
     let removeCollectible: (String) -> Void
     let browseCatalog: () -> Void
     
-    init(
+        init(
         togglePremium: @escaping (Bool) -> Void,
         addNumber: @escaping () -> Void,
         editOrRemoveNumber: @escaping (BiogramVirtualNumber) -> Void,
@@ -257,6 +353,7 @@ private final class BiogramArguments {
         toggleColor: @escaping (Bool) -> Void,
         selectPreset: @escaping (BiogramProfileColor) -> Void,
         setBrightness: @escaping (Double) -> Void,
+        pickBrightness: @escaping () -> Void,
         removeCollectible: @escaping (String) -> Void,
         browseCatalog: @escaping () -> Void
     ) {
@@ -268,6 +365,7 @@ private final class BiogramArguments {
         self.toggleColor = toggleColor
         self.selectPreset = selectPreset
         self.setBrightness = setBrightness
+        self.pickBrightness = pickBrightness
         self.removeCollectible = removeCollectible
         self.browseCatalog = browseCatalog
     }
