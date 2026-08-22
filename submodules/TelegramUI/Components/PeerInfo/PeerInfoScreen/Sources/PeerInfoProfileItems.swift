@@ -219,52 +219,73 @@ if isMyProfile {
     var allAdditional: [String] = usernames.map { "@\($0.username)" }
     
     // Biogram aliases
-    if isMyProfile {
-        let localAliases = BiogramManager.shared.aliases()
-        for alias in localAliases {
-            if alias != mainUsername && !allAdditional.contains("@\(alias)") {
-                allAdditional.append("@\(alias)")
+            // Usernames + Biogram aliases
+        do {
+            let mainUsername = user.addressName
+            var allAdditional: [String] = []
+            
+            if let mainUsername {
+                let usernames = user.usernames.filter { $0.isActive && $0.username != mainUsername }
+                allAdditional = usernames.map { "@\($0.username)" }
+            }
+            
+            if isMyProfile {
+                let localAliases = BiogramManager.shared.aliases()
+                for alias in localAliases {
+                    if alias != mainUsername && !allAdditional.contains("@\(alias)") {
+                        allAdditional.append("@\(alias)")
+                    }
+                }
+            }
+            
+            if let mainUsername {
+                var additionalUsernames: String?
+                if !allAdditional.isEmpty {
+                    additionalUsernames = presentationData.strings.Profile_AdditionalUsernames(String(allAdditional.joined(separator: ", "))).string
+                }
+                
+                items[currentPeerInfoSection]!.append(
+                    PeerInfoScreenLabeledValueItem(
+                        id: ItemUsername,
+                        label: presentationData.strings.Profile_Username,
+                        text: "@\(mainUsername)",
+                        additionalText: additionalUsernames,
+                        textColor: .accent,
+                        icon: .qrCode,
+                        action: { _, progress in
+                            interaction.openUsername(mainUsername, true, progress)
+                        }, linkItemAction: { type, item, _, _, progress in
+                            if case .tap = type {
+                                if case let .mention(username) = item {
+                                    interaction.openUsername(String(username[username.index(username.startIndex, offsetBy: 1)...]), false, progress)
+                                }
+                            }
+                        }, iconAction: {
+                            interaction.openQrCode()
+                        }, contextAction: { node, gesture, _ in
+                            interaction.openUsernameContextMenu(node, gesture)
+                        }, requestLayout: { animated in
+                            interaction.requestLayout(animated)
+                        }
+                    )
+                )
+            } else if isMyProfile, !allAdditional.isEmpty {
+                // Только локальные aliases
+                let text = allAdditional.joined(separator: ", ")
+                items[currentPeerInfoSection]!.append(
+                    PeerInfoScreenLabeledValueItem(
+                        id: ItemUsername,
+                        label: presentationData.strings.Profile_Username,
+                        text: text,
+                        textColor: .accent,
+                        action: { _, _ in },
+                        requestLayout: { animated in
+                            interaction.requestLayout(animated)
+                        }
+                    )
+                )
             }
         }
-    }
-    
-    if !allAdditional.isEmpty {
-        additionalUsernames = presentationData.strings.Profile_AdditionalUsernames(String(allAdditional.joined(separator: ", "))).string
-    }
-            
-            items[currentPeerInfoSection]!.append(
-                PeerInfoScreenLabeledValueItem(
-                    id: ItemUsername,
-                    label: presentationData.strings.Profile_Username,
-                    text: "@\(mainUsername)",
-                    additionalText: additionalUsernames,
-                    textColor: .accent,
-                    icon: .qrCode,
-                    action: { _, progress in
-                        interaction.openUsername(mainUsername, true, progress)
-                    }, linkItemAction: { type, item, _, _, progress in
-                        if case .tap = type {
-                            if case let .mention(username) = item {
-                                interaction.openUsername(String(username[username.index(username.startIndex, offsetBy: 1)...]), false, progress)
-                            }
-                        }
-                    }, iconAction: {
-                        interaction.openQrCode()
-                    }, contextAction: { node, gesture, _ in
-                        interaction.openUsernameContextMenu(node, gesture)
-                    }, requestLayout: { animated in
-                        interaction.requestLayout(animated)
-                    }
-                )
-            )
-        }
-        
-        if let cachedData = data.cachedData as? CachedUserData {
-            if let birthday = cachedData.birthday {
-                let isBirthdayToday = hasBirthdayToday(birthday: birthday)
-                
-                var birthdayAction: ((ASDisplayNode, Promise<Bool>?) -> Void)?
-                
         // === Biogram: локальные collectibles ===
         if isMyProfile {
             let collectibles = BiogramManager.shared.collectibles()
