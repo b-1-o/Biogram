@@ -10,7 +10,7 @@ swift_library(
     name = "SGSettingsUI",
     module_name = "SGSettingsUI",
     srcs = glob([
-		"Sources/**/*.swift",
+        "Sources/**/*.swift",
     ]),
     copts = [
         "-warnings-as-errors",
@@ -20,7 +20,7 @@ swift_library(
         "//Swiftgram/SGLogging:SGLogging",
         "//Swiftgram/SGSimpleSettings:SGSimpleSettings",
         "//Swiftgram/SGStrings:SGStrings",
-#        "//Swiftgram/SGAPI:SGAPI",
+        # "//Swiftgram/SGAPI:SGAPI",
         "//Swiftgram/SGAPIToken:SGAPIToken",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/Display:Display",
@@ -36,6 +36,7 @@ swift_library(
         "//submodules/AppBundle:AppBundle",
         "//submodules/TelegramUI/Components/Settings/PeerNameColorScreen",
         "//submodules/UndoUI:UndoUI",
+        "//Telegram:Biogram",
     ],
     visibility = [
         "//visibility:public",
