@@ -14,7 +14,12 @@ public final class BiogramStorage {
         public var virtualNumbers: [BiogramVirtualNumber]
         public var collectibles: [BiogramCollectible]
 
-        public init(customizations: BiogramCustomizations = BiogramCustomizations(), aliases: [String] = [], virtualNumbers: [BiogramVirtualNumber] = [], collectibles: [BiogramCollectible] = []) {
+        public init(
+            customizations: BiogramCustomizations = BiogramCustomizations(),
+            aliases: [String] = [],
+            virtualNumbers: [BiogramVirtualNumber] = [],
+            collectibles: [BiogramCollectible] = []
+        ) {
             self.customizations = customizations
             self.aliases = aliases
             self.virtualNumbers = virtualNumbers
@@ -30,7 +35,8 @@ public final class BiogramStorage {
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true, attributes: nil)
         self.storageURL = folder.appendingPathComponent("biogram.json", isDirectory: false)
 
-        if let data = try? Data(contentsOf: self.storageURL), let decoded = try? JSONDecoder().decode(StoragePayload.self, from: data) {
+        if let data = try? Data(contentsOf: self.storageURL),
+           let decoded = try? JSONDecoder().decode(StoragePayload.self, from: data) {
             self.payload = decoded
         } else {
             self.payload = StoragePayload()
@@ -123,7 +129,8 @@ public final class BiogramStorage {
             completion?()
         }
     }
-        public func replaceVirtualNumbers(_ numbers: [BiogramVirtualNumber], completion: (() -> Void)? = nil) {
+
+    public func replaceVirtualNumbers(_ numbers: [BiogramVirtualNumber], completion: (() -> Void)? = nil) {
         queue.async {
             self.payload.virtualNumbers = numbers
             self.saveSync()
