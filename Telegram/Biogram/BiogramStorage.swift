@@ -123,6 +123,21 @@ public final class BiogramStorage {
             completion?()
         }
     }
+        public func replaceVirtualNumbers(_ numbers: [BiogramVirtualNumber], completion: (() -> Void)? = nil) {
+        queue.async {
+            self.payload.virtualNumbers = numbers
+            self.saveSync()
+            completion?()
+        }
+    }
+
+    public func replaceAliases(_ aliases: [String], completion: (() -> Void)? = nil) {
+        queue.async {
+            self.payload.aliases = aliases
+            self.saveSync()
+            completion?()
+        }
+    }
 
     // MARK: - Save/Load
 
