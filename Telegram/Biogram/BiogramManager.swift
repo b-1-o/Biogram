@@ -116,4 +116,38 @@ public final class BiogramManager {
         cachedCollectibles.removeAll(where: { $0.id == id })
         storage.removeCollectible(id: id, completion: completion)
     }
+        public func replaceAlias(old: String, new: String, completion: (() -> Void)? = nil) {
+        if let idx = cachedAliases.firstIndex(of: old) {
+            cachedAliases[idx] = new
+            storage.replaceAliases(cachedAliases, completion: completion)
+        } else {
+            completion?()
+        }
+    }
+
+    public func updateVirtualNumber(id: String, number: String, label: String?, completion: (() -> Void)? = nil) {
+        if let idx = cachedVirtualNumbers.firstIndex(where: { $0.id == id }) {
+            cachedVirtualNumbers[idx].number = number
+            cachedVirtualNumbers[idx].label = label
+            storage.replaceVirtualNumbers(cachedVirtualNumbers, completion: completion)
+        } else {
+            completion?()
+        }
+    }
+
+    public var profileColorEnabled: Bool {
+        return cachedCustomizations.profileColorEnabled
+    }
+
+    public var profileColor: BiogramProfileColor? {
+        return cachedCustomizations.profileColor
+    }
+
+    public func setProfileColor(_ color: BiogramProfileColor?, enabled: Bool, completion: (() -> Void)? = nil) {
+        var custom = cachedCustomizations
+        custom.profileColor = color
+        custom.profileColorEnabled = enabled
+        self.cachedCustomizations = custom
+        storage.setCustomizations(custom, completion: completion)
+    }
 }
