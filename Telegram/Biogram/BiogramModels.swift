@@ -63,17 +63,18 @@ public struct BiogramProfileColor: Codable, Equatable {
         self.brightness = brightness
     }
 
-    public static let presets: [(String, BiogramProfileColor)] = [
-        ("Blue", BiogramProfileColor(r: 0.25, g: 0.55, b: 0.95)),
-        ("Dark Red", BiogramProfileColor(r: 0.55, g: 0.08, b: 0.12)),
-        ("Purple", BiogramProfileColor(r: 0.55, g: 0.25, b: 0.85)),
-        ("Green", BiogramProfileColor(r: 0.15, g: 0.65, b: 0.40)),
-        ("Orange", BiogramProfileColor(r: 0.95, g: 0.45, b: 0.15)),
-        ("Teal", BiogramProfileColor(r: 0.10, g: 0.70, b: 0.70)),
-        ("Pink", BiogramProfileColor(r: 0.90, g: 0.30, b: 0.55)),
-        ("Gray", BiogramProfileColor(r: 0.45, g: 0.45, b: 0.50)),
-    ]
-}
+public static let presets: [(String, BiogramProfileColor)] = [
+    ("Blue", BiogramProfileColor(r: 0.25, g: 0.55, b: 0.95)),
+    ("Dark Red", BiogramProfileColor(r: 0.55, g: 0.08, b: 0.12)),
+    ("Purple", BiogramProfileColor(r: 0.55, g: 0.25, b: 0.85)),
+    ("Green", BiogramProfileColor(r: 0.15, g: 0.65, b: 0.40)),
+    ("Orange", BiogramProfileColor(r: 0.95, g: 0.45, b: 0.15)),
+    ("Teal", BiogramProfileColor(r: 0.10, g: 0.70, b: 0.70)),
+    ("Pink", BiogramProfileColor(r: 0.90, g: 0.30, b: 0.55)),
+    ("Gray", BiogramProfileColor(r: 0.45, g: 0.45, b: 0.50)),
+    ("Black", BiogramProfileColor(r: 0.08, g: 0.08, b: 0.10)),
+    ("White", BiogramProfileColor(r: 0.95, g: 0.95, b: 0.97)),
+]
 
 public struct BiogramCustomizations: Codable, Equatable {
     public var localPremiumEnabled: Bool
