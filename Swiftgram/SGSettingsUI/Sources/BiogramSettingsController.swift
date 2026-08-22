@@ -10,230 +10,553 @@ import PresentationDataUtils
 import Biogram
 
 private enum BiogramSection: Int32 {
-    case premium
-    case numbers
-    case aliases
-    case collectibles
+    case premium = 0
+    case numbers = 1
+    case aliases = 2
+    case color = 3
+    case collectibles = 4
+    case info = 5
+}
+
+private final class BiogramControllerState: Equatable {
+    let premiumEnabled: Bool
+    let numbers: [BiogramVirtualNumber]
+    let aliases: [String]
+    let collectibles: [BiogramCollectible]
+    let profileColorEnabled: Bool
+    let profileColor: BiogramProfileColor?
+    
+    init(
+        premiumEnabled: Bool,
+        numbers: [BiogramVirtualNumber],
+        aliases: [String],
+        collectibles: [BiogramCollectible],
+        profileColorEnabled: Bool,
+        profileColor: BiogramProfileColor?
+    ) {
+        self.premiumEnabled = premiumEnabled
+        self.numbers = numbers
+        self.aliases = aliases
+        self.collectibles = collectibles
+        self.profileColorEnabled = profileColorEnabled
+        self.profileColor = profileColor
+    }
+    
+    static func ==(lhs: BiogramControllerState, rhs: BiogramControllerState) -> Bool {
+        return lhs.premiumEnabled == rhs.premiumEnabled
+            && lhs.numbers == rhs.numbers
+            && lhs.aliases == rhs.aliases
+            && lhs.collectibles == rhs.collectibles
+            && lhs.profileColorEnabled == rhs.profileColorEnabled
+            && lhs.profileColor == rhs.profileColor
+    }
+    
+    static func current() -> BiogramControllerState {
+        return BiogramControllerState(
+            premiumEnabled: BiogramManager.shared.localPremiumEnabled,
+            numbers: BiogramManager.shared.virtualNumbers(),
+            aliases: BiogramManager.shared.aliases(),
+            collectibles: BiogramManager.shared.collectibles(),
+            profileColorEnabled: BiogramManager.shared.profileColorEnabled,
+            profileColor: BiogramManager.shared.profileColor
+        )
+    }
+}
+
+private enum BiogramEntryId: Hashable {
+    case premiumHeader
+    case premiumToggle
+    case numbersHeader
+    case number(String)
+    case addNumber
+    case aliasesHeader
+    case alias(String)
+    case addAlias
+    case colorHeader
+    case colorToggle
+    case colorPreset(String)
+    case colorBrightness
+    case collectiblesHeader
+    case collectible(String)
+    case browseCatalog
+    case info
 }
 
 private enum BiogramEntry: ItemListNodeEntry {
-    case premiumHeader(PresentationTheme)
-    case premiumToggle(PresentationTheme, String, Bool)
-    
-    case numbersHeader(PresentationTheme)
-    case number(PresentationTheme, Int, BiogramVirtualNumber)
-    case addNumber(PresentationTheme, String)
-    
-    case aliasesHeader(PresentationTheme)
-    case alias(PresentationTheme, Int, String)
-    case addAlias(PresentationTheme, String)
-    
-    case collectiblesHeader(PresentationTheme)
-    case collectible(PresentationTheme, Int, BiogramCollectible)
-    case addCollectible(PresentationTheme, String)
+    case premiumHeader
+    case premiumToggle(Bool)
+    case numbersHeader
+    case number(Int, BiogramVirtualNumber)
+    case addNumber
+    case aliasesHeader
+    case alias(Int, String)
+    case addAlias
+    case colorHeader
+    case colorToggle(Bool)
+    case colorPreset(String, BiogramProfileColor, Bool)
+    case colorBrightness(Double)
+    case collectiblesHeader
+    case collectible(Int, BiogramCollectible)
+    case browseCatalog
+    case info
     
     var section: ItemListSectionId {
         switch self {
-        case .premiumHeader, .premiumToggle:
-            return BiogramSection.premium.rawValue
-        case .numbersHeader, .number, .addNumber:
-            return BiogramSection.numbers.rawValue
-        case .aliasesHeader, .alias, .addAlias:
-            return BiogramSection.aliases.rawValue
-        case .collectiblesHeader, .collectible, .addCollectible:
-            return BiogramSection.collectibles.rawValue
+        case .premiumHeader, .premiumToggle: return BiogramSection.premium.rawValue
+        case .numbersHeader, .number, .addNumber: return BiogramSection.numbers.rawValue
+        case .aliasesHeader, .alias, .addAlias: return BiogramSection.aliases.rawValue
+        case .colorHeader, .colorToggle, .colorPreset, .colorBrightness: return BiogramSection.color.rawValue
+        case .collectiblesHeader, .collectible, .browseCatalog: return BiogramSection.collectibles.rawValue
+        case .info: return BiogramSection.info.rawValue
         }
     }
     
-    var stableId: Int32 {
+    var stableId: BiogramEntryId {
         switch self {
-        case .premiumHeader: return 0
-        case .premiumToggle: return 1
-        case .numbersHeader: return 100
-        case let .number(_, index, _): return 101 + Int32(index)
-        case .addNumber: return 199
-        case .aliasesHeader: return 200
-        case let .alias(_, index, _): return 201 + Int32(index)
-        case .addAlias: return 299
-        case .collectiblesHeader: return 300
-        case let .collectible(_, index, _): return 301 + Int32(index)
-        case .addCollectible: return 399
+        case .premiumHeader: return .premiumHeader
+        case .premiumToggle: return .premiumToggle
+        case .numbersHeader: return .numbersHeader
+        case let .number(_, n): return .number(n.id)
+        case .addNumber: return .addNumber
+        case .aliasesHeader: return .aliasesHeader
+        case let .alias(_, a): return .alias(a)
+        case .addAlias: return .addAlias
+        case .colorHeader: return .colorHeader
+        case .colorToggle: return .colorToggle
+        case let .colorPreset(name, _, _): return .colorPreset(name)
+        case .colorBrightness: return .colorBrightness
+        case .collectiblesHeader: return .collectiblesHeader
+        case let .collectible(_, c): return .collectible(c.id)
+        case .browseCatalog: return .browseCatalog
+        case .info: return .info
         }
     }
     
     static func <(lhs: BiogramEntry, rhs: BiogramEntry) -> Bool {
-        return lhs.stableId < rhs.stableId
+        if lhs.section != rhs.section { return lhs.section < rhs.section }
+        switch (lhs, rhs) {
+        case (.premiumHeader, _): return true
+        case (_, .premiumHeader): return false
+        case (.premiumToggle, _): return true
+        case (_, .premiumToggle): return false
+        case (.numbersHeader, _): return true
+        case (_, .numbersHeader): return false
+        case let (.number(li, _), .number(ri, _)): return li < ri
+        case (.number, _): return true
+        case (_, .number): return false
+        case (.addNumber, _): return true
+        case (_, .addNumber): return false
+        case (.aliasesHeader, _): return true
+        case (_, .aliasesHeader): return false
+        case let (.alias(li, _), .alias(ri, _)): return li < ri
+        case (.alias, _): return true
+        case (_, .alias): return false
+        case (.addAlias, _): return true
+        case (_, .addAlias): return false
+        case (.colorHeader, _): return true
+        case (_, .colorHeader): return false
+        case (.colorToggle, _): return true
+        case (_, .colorToggle): return false
+        case let (.colorPreset(ln, _, _), .colorPreset(rn, _, _)): return ln < rn
+        case (.colorPreset, _): return true
+        case (_, .colorPreset): return false
+        case (.colorBrightness, _): return true
+        case (_, .colorBrightness): return false
+        case (.collectiblesHeader, _): return true
+        case (_, .collectiblesHeader): return false
+        case let (.collectible(li, _), .collectible(ri, _)): return li < ri
+        case (.collectible, _): return true
+        case (_, .collectible): return false
+        case (.browseCatalog, _): return true
+        case (_, .browseCatalog): return false
+        case (.info, .info): return false
+        default: return false
+        }
     }
     
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! BiogramArguments
         switch self {
-        case let .premiumHeader(theme):
+        case .premiumHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "LOCAL PREMIUM", sectionId: self.section)
-        case let .premiumToggle(_, title, value):
-            return ItemListSwitchItem(presentationData: presentationData, title: title, value: value, sectionId: self.section, style: .blocks, updated: { value in
-                arguments.togglePremium(value)
+        case let .premiumToggle(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Local Premium", value: value, sectionId: self.section, style: .blocks, updated: { newValue in
+                arguments.togglePremium(newValue)
             })
         case .numbersHeader:
-            return ItemListSectionHeaderItem(presentationData: presentationData, text: "VIRTUAL NUMBERS", sectionId: self.section)
-        case let .number(_, _, number):
-            return ItemListDisclosureItem(presentationData: presentationData, title: number.label ?? number.number, label: number.number, sectionId: self.section, style: .blocks, action: {
-                arguments.removeNumber(number.id)
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: "VIRTUAL / ANONYMOUS NUMBERS", sectionId: self.section)
+        case let .number(_, number):
+            let title = number.label ?? number.number
+            let label = number.label != nil ? number.number : "Tap to edit / remove"
+            return ItemListDisclosureItem(presentationData: presentationData, title: title, label: label, sectionId: self.section, style: .blocks, action: {
+                arguments.editOrRemoveNumber(number)
             })
-        case let .addNumber(_, title):
-            return ItemListActionItem(presentationData: presentationData, title: title, kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
+        case .addNumber:
+            return ItemListActionItem(presentationData: presentationData, title: "Add Number", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
                 arguments.addNumber()
             })
         case .aliasesHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "ALIASES / USERNAMES", sectionId: self.section)
-        case let .alias(_, _, alias):
-            return ItemListDisclosureItem(presentationData: presentationData, title: "@\(alias)", label: "", sectionId: self.section, style: .blocks, action: {
-                arguments.removeAlias(alias)
+        case let .alias(_, alias):
+            return ItemListDisclosureItem(presentationData: presentationData, title: "@\(alias)", label: "Tap to edit / remove", sectionId: self.section, style: .blocks, action: {
+                arguments.editOrRemoveAlias(alias)
             })
-        case let .addAlias(_, title):
-            return ItemListActionItem(presentationData: presentationData, title: title, kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
+        case .addAlias:
+            return ItemListActionItem(presentationData: presentationData, title: "Add Alias", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
                 arguments.addAlias()
             })
+        case .colorHeader:
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: "PROFILE COLOR", sectionId: self.section)
+        case let .colorToggle(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Custom profile color", value: value, sectionId: self.section, style: .blocks, updated: { newValue in
+                arguments.toggleColor(newValue)
+            })
+        case let .colorPreset(name, color, selected):
+            return ItemListDisclosureItem(presentationData: presentationData, title: name, label: selected ? "✓" : "", sectionId: self.section, style: .blocks, action: {
+                arguments.selectPreset(color)
+            })
+        case let .colorBrightness(value):
+            // Если ItemListSliderItem не скомпилируется — просто закомментируй эту строку
+            return ItemListSliderItem(presentationData: presentationData, title: "Brightness", value: value, minValue: 0.3, maxValue: 1.2, sectionId: self.section, style: .blocks, updated: { newValue in
+                arguments.setBrightness(newValue)
+            })
         case .collectiblesHeader:
-            return ItemListSectionHeaderItem(presentationData: presentationData, text: "COLLECTIBLES", sectionId: self.section)
-        case let .collectible(_, _, item):
-            return ItemListDisclosureItem(presentationData: presentationData, title: item.title ?? item.id, label: "", sectionId: self.section, style: .blocks, action: {
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: "COLLECTIBLES / GIFTS", sectionId: self.section)
+        case let .collectible(_, item):
+            return ItemListDisclosureItem(presentationData: presentationData, title: item.title ?? item.id, label: "Tap to remove", sectionId: self.section, style: .blocks, action: {
                 arguments.removeCollectible(item.id)
             })
-        case let .addCollectible(_, title):
-            return ItemListActionItem(presentationData: presentationData, title: title, kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
-                arguments.addCollectible()
+        case .browseCatalog:
+            return ItemListActionItem(presentationData: presentationData, title: "Browse Gift Catalog", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
+                arguments.browseCatalog()
             })
+        case .info:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Local-only. Visible only in this client. Not sent to Telegram servers."), sectionId: self.section)
         }
     }
 }
 
 private final class BiogramArguments {
-    let context: AccountContext
     let togglePremium: (Bool) -> Void
     let addNumber: () -> Void
-    let removeNumber: (String) -> Void
+    let editOrRemoveNumber: (BiogramVirtualNumber) -> Void
     let addAlias: () -> Void
-    let removeAlias: (String) -> Void
-    let addCollectible: () -> Void
+    let editOrRemoveAlias: (String) -> Void
+    let toggleColor: (Bool) -> Void
+    let selectPreset: (BiogramProfileColor) -> Void
+    let setBrightness: (Double) -> Void
     let removeCollectible: (String) -> Void
+    let browseCatalog: () -> Void
     
-    init(context: AccountContext, togglePremium: @escaping (Bool) -> Void, addNumber: @escaping () -> Void, removeNumber: @escaping (String) -> Void, addAlias: @escaping () -> Void, removeAlias: @escaping (String) -> Void, addCollectible: @escaping () -> Void, removeCollectible: @escaping (String) -> Void) {
-        self.context = context
+    init(
+        togglePremium: @escaping (Bool) -> Void,
+        addNumber: @escaping () -> Void,
+        editOrRemoveNumber: @escaping (BiogramVirtualNumber) -> Void,
+        addAlias: @escaping () -> Void,
+        editOrRemoveAlias: @escaping (String) -> Void,
+        toggleColor: @escaping (Bool) -> Void,
+        selectPreset: @escaping (BiogramProfileColor) -> Void,
+        setBrightness: @escaping (Double) -> Void,
+        removeCollectible: @escaping (String) -> Void,
+        browseCatalog: @escaping () -> Void
+    ) {
         self.togglePremium = togglePremium
         self.addNumber = addNumber
-        self.removeNumber = removeNumber
+        self.editOrRemoveNumber = editOrRemoveNumber
         self.addAlias = addAlias
-        self.removeAlias = removeAlias
-        self.addCollectible = addCollectible
+        self.editOrRemoveAlias = editOrRemoveAlias
+        self.toggleColor = toggleColor
+        self.selectPreset = selectPreset
+        self.setBrightness = setBrightness
         self.removeCollectible = removeCollectible
+        self.browseCatalog = browseCatalog
     }
 }
 
-private func biogramEntries(presentationData: PresentationData, premiumEnabled: Bool, numbers: [BiogramVirtualNumber], aliases: [String], collectibles: [BiogramCollectible]) -> [BiogramEntry] {
+private func biogramControllerEntries(state: BiogramControllerState) -> [BiogramEntry] {
     var entries: [BiogramEntry] = []
     
-    entries.append(.premiumHeader(presentationData.theme))
-    entries.append(.premiumToggle(presentationData.theme, "Local Premium", premiumEnabled))
+    entries.append(.premiumHeader)
+    entries.append(.premiumToggle(state.premiumEnabled))
     
-    entries.append(.numbersHeader(presentationData.theme))
-    for (i, n) in numbers.enumerated() {
-        entries.append(.number(presentationData.theme, i, n))
+    entries.append(.numbersHeader)
+    for (i, n) in state.numbers.enumerated() {
+        entries.append(.number(i, n))
     }
-    entries.append(.addNumber(presentationData.theme, "Add Virtual Number"))
+    entries.append(.addNumber)
     
-    entries.append(.aliasesHeader(presentationData.theme))
-    for (i, a) in aliases.enumerated() {
-        entries.append(.alias(presentationData.theme, i, a))
+    entries.append(.aliasesHeader)
+    for (i, a) in state.aliases.enumerated() {
+        entries.append(.alias(i, a))
     }
-    entries.append(.addAlias(presentationData.theme, "Add Alias"))
+    entries.append(.addAlias)
     
-    entries.append(.collectiblesHeader(presentationData.theme))
-    for (i, c) in collectibles.enumerated() {
-        entries.append(.collectible(presentationData.theme, i, c))
+    entries.append(.colorHeader)
+    entries.append(.colorToggle(state.profileColorEnabled))
+    if state.profileColorEnabled {
+        let current = state.profileColor
+        for (name, preset) in BiogramProfileColor.presets {
+            let selected = current != nil &&
+                abs(current!.r - preset.r) < 0.01 &&
+                abs(current!.g - preset.g) < 0.01 &&
+                abs(current!.b - preset.b) < 0.01
+            entries.append(.colorPreset(name, preset, selected))
+        }
+        entries.append(.colorBrightness(current?.brightness ?? 1.0))
     }
-    entries.append(.addCollectible(presentationData.theme, "Add Collectible"))
+    
+    entries.append(.collectiblesHeader)
+    for (i, c) in state.collectibles.enumerated() {
+        entries.append(.collectible(i, c))
+    }
+    entries.append(.browseCatalog)
+    
+    entries.append(.info)
     
     return entries
 }
 
 public func biogramSettingsController(context: AccountContext) -> ViewController {
+    let statePromise = ValuePromise(BiogramControllerState.current(), ignoreRepeated: true)
+    let stateValue = Atomic(value: BiogramControllerState.current())
+    
+    let updateState: (() -> Void) = {
+        let newState = BiogramControllerState.current()
+        let _ = stateValue.swap(newState)
+        statePromise.set(newState)
+    }
+    
     var presentControllerImpl: ((ViewController, Any?) -> Void)?
-    var pushControllerImpl: ((ViewController) -> Void)?
     
     let arguments = BiogramArguments(
-        context: context,
         togglePremium: { enabled in
-            BiogramManager.shared.setLocalPremiumEnabled(enabled)
+            BiogramManager.shared.setLocalPremiumEnabled(enabled) {
+                Queue.mainQueue().async { updateState() }
+            }
+            updateState()
         },
         addNumber: {
-            // простой prompt
+            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+            var dismissImpl: (() -> Void)?
+            let controller = promptController(
+                sharedContext: context.sharedContext,
+                updatedPresentationData: nil,
+                text: "Virtual / anonymous number",
+                title: "Enter number",
+                value: "+888 ",
+                placeholder: "+888 00001212",
+                actionTitle: presentationData.strings.Common_Done,
+                cancelTitle: presentationData.strings.Common_Cancel,
+                action: { value in
+                    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty else { return false }
+                    let number = BiogramVirtualNumber(number: trimmed)
+                    BiogramManager.shared.addVirtualNumber(number) {
+                        Queue.mainQueue().async { updateState() }
+                    }
+                    updateState()
+                    dismissImpl?()
+                    return true
+                }
+            )
+            dismissImpl = { [weak controller] in controller?.dismiss() }
+            presentControllerImpl?(controller, nil)
+        },
+        editOrRemoveNumber: { number in
+            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
             let alert = textAlertController(
                 context: context,
-                title: "Virtual Number",
-                text: "Enter number (e.g. +888 123456)",
+                title: number.number,
+                text: "Edit or remove this number",
                 actions: [
                     TextAlertAction(type: .genericAction, title: "Cancel", action: {}),
-                    TextAlertAction(type: .defaultAction, title: "Add", action: {
-                        // пока заглушка — добавим нормальный input позже
-                        let number = BiogramVirtualNumber(number: "+888 \(Int.random(in: 100000...999999))")
-                        BiogramManager.shared.addVirtualNumber(number)
+                    TextAlertAction(type: .defaultAction, title: "Edit", action: {
+                        var dismissImpl: (() -> Void)?
+                        let editCtrl = promptController(
+                            sharedContext: context.sharedContext,
+                            updatedPresentationData: nil,
+                            text: "Edit number",
+                            title: "Number",
+                            value: number.number,
+                            placeholder: "+888 ...",
+                            actionTitle: presentationData.strings.Common_Done,
+                            cancelTitle: presentationData.strings.Common_Cancel,
+                            action: { value in
+                                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                                guard !trimmed.isEmpty else { return false }
+                                BiogramManager.shared.updateVirtualNumber(id: number.id, number: trimmed, label: number.label) {
+                                    Queue.mainQueue().async { updateState() }
+                                }
+                                updateState()
+                                dismissImpl?()
+                                return true
+                            }
+                        )
+                        dismissImpl = { [weak editCtrl] in editCtrl?.dismiss() }
+                        presentControllerImpl?(editCtrl, nil)
+                    }),
+                    TextAlertAction(type: .destructiveAction, title: "Delete", action: {
+                        BiogramManager.shared.removeVirtualNumber(id: number.id) {
+                            Queue.mainQueue().async { updateState() }
+                        }
+                        updateState()
                     })
                 ]
             )
             presentControllerImpl?(alert, nil)
-        },
-        removeNumber: { id in
-            BiogramManager.shared.removeVirtualNumber(id: id)
         },
         addAlias: {
+            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+            var dismissImpl: (() -> Void)?
+            let controller = promptController(
+                sharedContext: context.sharedContext,
+                updatedPresentationData: nil,
+                text: "Alias / username (without @)",
+                title: "Enter username",
+                value: "",
+                placeholder: "username",
+                actionTitle: presentationData.strings.Common_Done,
+                cancelTitle: presentationData.strings.Common_Cancel,
+                action: { value in
+                    var trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if trimmed.hasPrefix("@") { trimmed = String(trimmed.dropFirst()) }
+                    guard !trimmed.isEmpty else { return false }
+                    BiogramManager.shared.addAlias(trimmed) {
+                        Queue.mainQueue().async { updateState() }
+                    }
+                    updateState()
+                    dismissImpl?()
+                    return true
+                }
+            )
+            dismissImpl = { [weak controller] in controller?.dismiss() }
+            presentControllerImpl?(controller, nil)
+        },
+        editOrRemoveAlias: { alias in
+            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
             let alert = textAlertController(
                 context: context,
-                title: "Alias",
-                text: "Enter username without @",
+                title: "@\(alias)",
+                text: "Edit or remove this alias",
                 actions: [
                     TextAlertAction(type: .genericAction, title: "Cancel", action: {}),
-                    TextAlertAction(type: .defaultAction, title: "Add", action: {
-                        let alias = "alias\(Int.random(in: 100...999))"
-                        BiogramManager.shared.addAlias(alias)
+                    TextAlertAction(type: .defaultAction, title: "Edit", action: {
+                        var dismissImpl: (() -> Void)?
+                        let editCtrl = promptController(
+                            sharedContext: context.sharedContext,
+                            updatedPresentationData: nil,
+                            text: "Edit alias (without @)",
+                            title: "Username",
+                            value: alias,
+                            placeholder: "username",
+                            actionTitle: presentationData.strings.Common_Done,
+                            cancelTitle: presentationData.strings.Common_Cancel,
+                            action: { value in
+                                var trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                                if trimmed.hasPrefix("@") { trimmed = String(trimmed.dropFirst()) }
+                                guard !trimmed.isEmpty else { return false }
+                                BiogramManager.shared.replaceAlias(old: alias, new: trimmed) {
+                                    Queue.mainQueue().async { updateState() }
+                                }
+                                updateState()
+                                dismissImpl?()
+                                return true
+                            }
+                        )
+                        dismissImpl = { [weak editCtrl] in editCtrl?.dismiss() }
+                        presentControllerImpl?(editCtrl, nil)
+                    }),
+                    TextAlertAction(type: .destructiveAction, title: "Delete", action: {
+                        BiogramManager.shared.removeAlias(alias) {
+                            Queue.mainQueue().async { updateState() }
+                        }
+                        updateState()
                     })
                 ]
             )
             presentControllerImpl?(alert, nil)
         },
-        removeAlias: { alias in
-            BiogramManager.shared.removeAlias(alias)
+        toggleColor: { enabled in
+            let current = BiogramManager.shared.profileColor ?? BiogramProfileColor.presets[0].1
+            BiogramManager.shared.setProfileColor(current, enabled: enabled) {
+                Queue.mainQueue().async { updateState() }
+            }
+            updateState()
         },
-        addCollectible: {
-            let item = BiogramCollectible(title: "Collectible \(Int.random(in: 1...99))", assetFilename: "placeholder", assetType: "image")
-            BiogramManager.shared.addCollectible(item)
+        selectPreset: { color in
+            let brightness = BiogramManager.shared.profileColor?.brightness ?? 1.0
+            let newColor = BiogramProfileColor(r: color.r, g: color.g, b: color.b, brightness: brightness)
+            BiogramManager.shared.setProfileColor(newColor, enabled: true) {
+                Queue.mainQueue().async { updateState() }
+            }
+            updateState()
+        },
+        setBrightness: { value in
+            guard var color = BiogramManager.shared.profileColor else { return }
+            color.brightness = value
+            BiogramManager.shared.setProfileColor(color, enabled: true) {
+                Queue.mainQueue().async { updateState() }
+            }
+            updateState()
         },
         removeCollectible: { id in
-            BiogramManager.shared.removeCollectible(id: id)
+            BiogramManager.shared.removeCollectible(id: id) {
+                Queue.mainQueue().async { updateState() }
+            }
+            updateState()
+        },
+        browseCatalog: {
+            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+            var actions: [TextAlertAction] = [
+                TextAlertAction(type: .genericAction, title: "Cancel", action: {})
+            ]
+            for item in BiogramGiftCatalog.items {
+                actions.append(TextAlertAction(type: .defaultAction, title: item.title, action: {
+                    let collectible = BiogramCollectible(
+                        title: item.title,
+                        assetFilename: item.slug,
+                        assetType: "gift",
+                        giftSlug: item.slug
+                    )
+                    BiogramManager.shared.addCollectible(collectible) {
+                        Queue.mainQueue().async { updateState() }
+                    }
+                    updateState()
+                }))
+            }
+            let alert = textAlertController(
+                context: context,
+                title: "Gift Catalog",
+                text: "Choose a gift to add locally",
+                actions: actions
+            )
+            presentControllerImpl?(alert, nil)
         }
     )
     
-    let signal = context.sharedContext.presentationData
-    |> map { presentationData -> (ItemListControllerState, (ItemListNodeState, Any)) in
-        let premium = BiogramManager.shared.localPremiumEnabled
-        let numbers = BiogramManager.shared.virtualNumbers()
-        let aliases = BiogramManager.shared.aliases()
-        let collectibles = BiogramManager.shared.collectibles()
-        
-        let entries = biogramEntries(presentationData: presentationData, premiumEnabled: premium, numbers: numbers, aliases: aliases, collectibles: collectibles)
+    let signal = combineLatest(
+        queue: .mainQueue(),
+        context.sharedContext.presentationData,
+        statePromise.get()
+    )
+    |> map { presentationData, state -> (ItemListControllerState, (ItemListNodeState, Any)) in
+        let entries = biogramControllerEntries(state: state)
         
         let controllerState = ItemListControllerState(
             presentationData: ItemListPresentationData(presentationData),
             title: .text("Biogram"),
             leftNavigationButton: nil,
             rightNavigationButton: nil,
-            backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back)
+            backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back),
+            animateChanges: true
         )
         
         let listState = ItemListNodeState(
             presentationData: ItemListPresentationData(presentationData),
             entries: entries,
-            style: .blocks
+            style: .blocks,
+            emptyStateItem: nil,
+            animateChanges: true
         )
         
         return (controllerState, (listState, arguments))
@@ -242,9 +565,6 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
     let controller = ItemListController(context: context, state: signal)
     presentControllerImpl = { [weak controller] c, a in
         controller?.present(c, in: .window(.root), with: a)
-    }
-    pushControllerImpl = { [weak controller] c in
-        (controller?.navigationController as? NavigationController)?.pushViewController(c)
     }
     return controller
 }
