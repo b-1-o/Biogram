@@ -340,7 +340,7 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
             var dismissImpl: (() -> Void)?
             let controller = promptController(
                 sharedContext: context.sharedContext,
-                updatedPresentationData: nil,
+                updatedPresentationData: (context.sharedContext.currentPresentationData.with { $0 }, context.sharedContext.presentationData),
                 text: "Virtual / anonymous number",
                 title: "Enter number",
                 value: "+888 ",
@@ -348,7 +348,7 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
                 actionTitle: presentationData.strings.Common_Done,
                 cancelTitle: presentationData.strings.Common_Cancel,
                 action: { value in
-                    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let trimmed = value.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
                     guard !trimmed.isEmpty else { return false }
                     let number = BiogramVirtualNumber(number: trimmed)
                     BiogramManager.shared.addVirtualNumber(number) {
@@ -382,7 +382,7 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
                             actionTitle: presentationData.strings.Common_Done,
                             cancelTitle: presentationData.strings.Common_Cancel,
                             action: { value in
-                                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                                let trimmed = value.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
                                 guard !trimmed.isEmpty else { return false }
                                 BiogramManager.shared.updateVirtualNumber(id: number.id, number: trimmed, label: number.label) {
                                     Queue.mainQueue().async { updateState() }
@@ -418,7 +418,7 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
                 actionTitle: presentationData.strings.Common_Done,
                 cancelTitle: presentationData.strings.Common_Cancel,
                 action: { value in
-                    var trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let trimmed = value.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
                     if trimmed.hasPrefix("@") { trimmed = String(trimmed.dropFirst()) }
                     guard !trimmed.isEmpty else { return false }
                     BiogramManager.shared.addAlias(trimmed) {
@@ -452,7 +452,7 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
                             actionTitle: presentationData.strings.Common_Done,
                             cancelTitle: presentationData.strings.Common_Cancel,
                             action: { value in
-                                var trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                                let trimmed = value.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
                                 if trimmed.hasPrefix("@") { trimmed = String(trimmed.dropFirst()) }
                                 guard !trimmed.isEmpty else { return false }
                                 BiogramManager.shared.replaceAlias(old: alias, new: trimmed) {
