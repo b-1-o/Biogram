@@ -273,22 +273,33 @@ func infoItems(
         }
         
         // === Biogram: локальные collectibles ===
-        if isMyProfile {
-            let collectibles = BiogramManager.shared.collectibles()
-            for (index, item) in collectibles.enumerated() {
-                let title = item.title ?? item.id
-                items[currentPeerInfoSection]!.append(
-                    PeerInfoScreenLabeledValueItem(
-                        id: 9500 + index,
-                        label: "Collectible",
-                        text: title,
-                        textColor: .primary,
-                        action: nil,
-                        requestLayout: { _ in }
-                    )
+        // === Biogram: локальные collectibles (как подарки) ===
+if isMyProfile {
+    let collectibles = BiogramManager.shared.collectibles()
+    if !collectibles.isEmpty {
+        // Заголовок секции
+        items[currentPeerInfoSection]!.append(
+            PeerInfoScreenHeaderItem(
+                id: 9499,
+                text: "Gifts"
+            )
+        )
+        
+        for (index, item) in collectibles.enumerated() {
+            let title = item.title ?? item.giftSlug ?? item.id
+            items[currentPeerInfoSection]!.append(
+                PeerInfoScreenLabeledValueItem(
+                    id: 9500 + index,
+                    label: "Gift",
+                    text: title,
+                    textColor: .accent,
+                    action: nil,
+                    requestLayout: { _ in }
                 )
-            }
+            )
         }
+    }
+}
         
         if let cachedData = data.cachedData as? CachedUserData {
             if let birthday = cachedData.birthday {
