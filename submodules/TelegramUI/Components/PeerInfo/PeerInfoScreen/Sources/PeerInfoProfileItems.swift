@@ -266,21 +266,22 @@ if isMyProfile {
                 var birthdayAction: ((ASDisplayNode, Promise<Bool>?) -> Void)?
                 
         // === Biogram: локальные collectibles ===
-if isMyProfile {
-    let collectibles = BiogramManager.shared.collectibles()
-    for (index, item) in collectibles.enumerated() {
-        items[currentPeerInfoSection]!.append(
-            PeerInfoScreenLabeledValueItem(
-                id: 9500 + index,
-                label: "Collectible",
-                text: item.title.isEmpty ? item.id : item.title,
-                textColor: .primary,
-                action: nil,
-                requestLayout: { _ in }
-            )
-        )
-    }
-}
+        if isMyProfile {
+            let collectibles = BiogramManager.shared.collectibles()
+            for (index, item) in collectibles.enumerated() {
+                let title = item.title ?? item.id
+                items[currentPeerInfoSection]!.append(
+                    PeerInfoScreenLabeledValueItem(
+                        id: 9500 + index,
+                        label: "Collectible",
+                        text: title,
+                        textColor: .primary,
+                        action: nil,
+                        requestLayout: { _ in }
+                    )
+                )
+            }
+        }
                     birthdayAction = { node, _ in
                         birthdayContextAction(node, nil, nil)
                     }
