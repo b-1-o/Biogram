@@ -3,7 +3,7 @@ import SGSimpleSettings
 import SGSettingsUI
 import SGStrings
 import CountrySelectionUI
-import Foundation 
+import Foundation
 import UIKit
 import Display
 import AccountContext
@@ -172,28 +172,27 @@ func infoItems(
                 }
             ))
         }
+        
         // === Biogram: локальные виртуальные номера ===
-if isMyProfile {
-    let localNumbers = BiogramManager.shared.virtualNumbers()
-    for (index, localNumber) in localNumbers.enumerated() {
-        items[currentPeerInfoSection]!.append(
-            PeerInfoScreenLabeledValueItem(
-                id: ItemPhoneNumber + 100 + index,
-                label: "Анонимный номер",
-                text: localNumber.number,
-                textColor: .accent,
-                action: { _, _ in },
-                longTapAction: nil,
-                contextAction: nil,
-                requestLayout: { animated in
-                    interaction.requestLayout(animated)
-                }
-            )
-        )
-    }
-}
-
-
+        if isMyProfile {
+            let localNumbers = BiogramManager.shared.virtualNumbers()
+            for (index, localNumber) in localNumbers.enumerated() {
+                items[currentPeerInfoSection]!.append(
+                    PeerInfoScreenLabeledValueItem(
+                        id: ItemPhoneNumber + 100 + index,
+                        label: "Анонимный номер",
+                        text: localNumber.number,
+                        textColor: .accent,
+                        action: { _, _ in },
+                        longTapAction: nil,
+                        contextAction: nil,
+                        requestLayout: { animated in
+                            interaction.requestLayout(animated)
+                        }
+                    )
+                )
+            }
+        }
         
         if let phone = user.phone, !(SGSimpleSettings.shared.hidePhoneInSettings && isMyProfile) {
             let formattedPhone = formatPhoneNumber(context: context, number: phone)
@@ -211,23 +210,10 @@ if isMyProfile {
                 interaction.requestLayout(animated)
             }))
         }
-        
         if let mainUsername = user.addressName {
-    var additionalUsernames: String?
-    
-    let usernames = user.usernames.filter { $0.isActive && $0.username != mainUsername }
-    var allAdditional: [String] = usernames.map { "@\($0.username)" }
-    
-    // Biogram aliases
-            // Usernames + Biogram aliases
-        do {
-            let mainUsername = user.addressName
-            var allAdditional: [String] = []
-            
-            if let mainUsername {
-                let usernames = user.usernames.filter { $0.isActive && $0.username != mainUsername }
-                allAdditional = usernames.map { "@\($0.username)" }
-            }
+            var additionalUsernames: String?
+            let usernames = user.usernames.filter { $0.isActive && $0.username != mainUsername }
+            var allAdditional: [String] = usernames.map { "@\($0.username)" }
             
             if isMyProfile {
                 let localAliases = BiogramManager.shared.aliases()
@@ -238,40 +224,39 @@ if isMyProfile {
                 }
             }
             
-            if let mainUsername {
-                var additionalUsernames: String?
-                if !allAdditional.isEmpty {
-                    additionalUsernames = presentationData.strings.Profile_AdditionalUsernames(String(allAdditional.joined(separator: ", "))).string
-                }
-                
-                items[currentPeerInfoSection]!.append(
-                    PeerInfoScreenLabeledValueItem(
-                        id: ItemUsername,
-                        label: presentationData.strings.Profile_Username,
-                        text: "@\(mainUsername)",
-                        additionalText: additionalUsernames,
-                        textColor: .accent,
-                        icon: .qrCode,
-                        action: { _, progress in
-                            interaction.openUsername(mainUsername, true, progress)
-                        }, linkItemAction: { type, item, _, _, progress in
-                            if case .tap = type {
-                                if case let .mention(username) = item {
-                                    interaction.openUsername(String(username[username.index(username.startIndex, offsetBy: 1)...]), false, progress)
-                                }
+            if !allAdditional.isEmpty {
+                additionalUsernames = presentationData.strings.Profile_AdditionalUsernames(String(allAdditional.joined(separator: ", "))).string
+            }
+            
+            items[currentPeerInfoSection]!.append(
+                PeerInfoScreenLabeledValueItem(
+                    id: ItemUsername,
+                    label: presentationData.strings.Profile_Username,
+                    text: "@\(mainUsername)",
+                    additionalText: additionalUsernames,
+                    textColor: .accent,
+                    icon: .qrCode,
+                    action: { _, progress in
+                        interaction.openUsername(mainUsername, true, progress)
+                    }, linkItemAction: { type, item, _, _, progress in
+                        if case .tap = type {
+                            if case let .mention(username) = item {
+                                interaction.openUsername(String(username[username.index(username.startIndex, offsetBy: 1)...]), false, progress)
                             }
-                        }, iconAction: {
-                            interaction.openQrCode()
-                        }, contextAction: { node, gesture, _ in
-                            interaction.openUsernameContextMenu(node, gesture)
-                        }, requestLayout: { animated in
-                            interaction.requestLayout(animated)
                         }
-                    )
+                    }, iconAction: {
+                        interaction.openQrCode()
+                    }, contextAction: { node, gesture, _ in
+                        interaction.openUsernameContextMenu(node, gesture)
+                    }, requestLayout: { animated in
+                        interaction.requestLayout(animated)
+                    }
                 )
-            } else if isMyProfile, !allAdditional.isEmpty {
-                // Только локальные aliases
-                let text = allAdditional.joined(separator: ", ")
+            )
+        } else if isMyProfile {
+            let localAliases = BiogramManager.shared.aliases()
+            if !localAliases.isEmpty {
+                let text = localAliases.map { "@\($0)" }.joined(separator: ", ")
                 items[currentPeerInfoSection]!.append(
                     PeerInfoScreenLabeledValueItem(
                         id: ItemUsername,
@@ -286,6 +271,7 @@ if isMyProfile {
                 )
             }
         }
+        
         // === Biogram: локальные collectibles ===
         if isMyProfile {
             let collectibles = BiogramManager.shared.collectibles()
@@ -303,6 +289,13 @@ if isMyProfile {
                 )
             }
         }
+        
+        if let cachedData = data.cachedData as? CachedUserData {
+            if let birthday = cachedData.birthday {
+                let isBirthdayToday = hasBirthdayToday(birthday: birthday)
+                
+                var birthdayAction: ((ASDisplayNode, Promise<Bool>?) -> Void)?
+                if isMyProfile {
                     birthdayAction = { node, _ in
                         birthdayContextAction(node, nil, nil)
                     }
@@ -2075,10 +2068,10 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
     }
     
     var result: [(AnyHashable, [PeerInfoScreenItem])] = []
-    for section in InfoSection.allCases {
+    for section in Section.allCases {
         if let sectionItems = items[section], !sectionItems.isEmpty {
             result.append((section, sectionItems))
         }
     }
     return result
-} 
+}
