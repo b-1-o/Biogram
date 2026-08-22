@@ -665,7 +665,7 @@ plist_fragment(
     template =
     """
     <key>CFBundleDisplayName</key>
-    <string>Swiftgram</string>
+    <string>Biogram</string>
     """
 )
 
