@@ -621,7 +621,6 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
             updateState()
         },
         browseCatalog: {
-            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
             var actions: [TextAlertAction] = [
                 TextAlertAction(type: .genericAction, title: "Cancel", action: {})
             ]
