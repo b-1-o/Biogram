@@ -70,16 +70,24 @@ private final class BiogramTextInputController: ViewController {
             }
         }))
         
-        Queue.mainQueue().after(0.05) { [weak self] in
-            guard let self = self else { return }
-            if let root = self.view.window?.rootViewController {
-                var top: UIViewController = root
-                while let p = top.presentedViewController { top = p }
-                top.present(alert, animated: true)
-            }
+            Queue.mainQueue().after(0.05) { [weak self] in
+        guard let self = self else {
+            return
         }
+
+        guard let root = self.view.window?.rootViewController else {
+            return
+        }
+
+        var top: UIViewController = root
+
+        while let presented = top.presentedViewController {
+            top = presented
+        }
+
+        top.present(alert, animated: true)
     }
-    
+
     private func close() {
         self.dismiss(animated: false)
     }
@@ -456,44 +464,67 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
             )
             presentControllerImpl?(controller, nil)
         },
-        editOrRemoveNumber: { number in
-            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-            let alert = textAlertController(
-                context: context,
-                title: number.number,
-                text: "Edit or remove this number",
-                actions: [
-                    TextAlertAction(type: .genericAction, title: "Cancel", action: {}),
-                    TextAlertAction(type: .defaultAction, title: "Edit", action: {
-                        let editCtrl = biogramPrompt(
-                            title: "Number",
-                            text: "Edit number",
-                            value: number.number,
-                            placeholder: "+888 ...",
-                            actionTitle: presentationData.strings.Common_Done,
-                            cancelTitle: presentationData.strings.Common_Cancel,
-                            action: { value in
-                                let trimmed = value.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
-                                guard !trimmed.isEmpty else { return false }
-                                BiogramManager.shared.updateVirtualNumber(id: number.id, number: trimmed, label: number.label) {
-                                    Queue.mainQueue().async { updateState() }
-                                }
-                                updateState()
-                                return true
+editOrRemoveNumber: { number in
+    let alert = BiogramActionsAlertController(
+        title: number.number,
+        message: "Edit or remove this number",
+        actions: [
+            (
+                title: "Edit",
+                destructive: false,
+                action: {
+                    let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+
+                    let editCtrl = biogramPrompt(
+                        title: "Number",
+                        text: "Edit number",
+                        value: number.number,
+                        placeholder: "+888 ...",
+                        actionTitle: presentationData.strings.Common_Done,
+                        cancelTitle: presentationData.strings.Common_Cancel,
+                        action: { value in
+                            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                            guard !trimmed.isEmpty else {
+                                return false
                             }
-                        )
-                        presentControllerImpl?(editCtrl, nil)
-                    }),
-                    TextAlertAction(type: .destructiveAction, title: "Delete", action: {
-                        BiogramManager.shared.removeVirtualNumber(id: number.id) {
-                            Queue.mainQueue().async { updateState() }
+
+                            BiogramManager.shared.updateVirtualNumber(
+                                id: number.id,
+                                number: trimmed,
+                                label: number.label
+                            ) {
+                                Queue.mainQueue().async {
+                                    updateState()
+                                }
+                            }
+
+                            updateState()
+                            return true
                         }
-                        updateState()
-                    })
-                ]
+                    )
+
+                    presentControllerImpl?(editCtrl, nil)
+                }
+            ),
+            (
+                title: "Delete",
+                destructive: true,
+                action: {
+                    BiogramManager.shared.removeVirtualNumber(id: number.id) {
+                        Queue.mainQueue().async {
+                            updateState()
+                        }
+                    }
+
+                    updateState()
+                }
             )
-            presentControllerImpl?(alert, nil)
-        },
+        ]
+    )
+
+    presentControllerImpl?(alert, nil)
+},
         addAlias: {
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
             let controller = biogramPrompt(
@@ -518,47 +549,66 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
             )
             presentControllerImpl?(controller, nil)
         },
-        editOrRemoveAlias: { alias in
-            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-            let alert = textAlertController(
-                context: context,
-                title: "@\(alias)",
-                text: "Edit or remove this alias",
-                actions: [
-                    TextAlertAction(type: .genericAction, title: "Cancel", action: {}),
-                    TextAlertAction(type: .defaultAction, title: "Edit", action: {
-                        let editCtrl = biogramPrompt(
-                            title: "Username",
-                            text: "Edit alias (without @)",
-                            value: alias,
-                            placeholder: "username",
-                            actionTitle: presentationData.strings.Common_Done,
-                            cancelTitle: presentationData.strings.Common_Cancel,
-                            action: { value in
-                                var trimmed = value.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
-                                if trimmed.hasPrefix("@") {
-                                    trimmed = String(trimmed.dropFirst())
-                                }
-                                guard !trimmed.isEmpty else { return false }
-                                BiogramManager.shared.replaceAlias(old: alias, new: trimmed) {
-                                    Queue.mainQueue().async { updateState() }
-                                }
-                                updateState()
-                                return true
+editOrRemoveAlias: { alias in
+    let alert = BiogramActionsAlertController(
+        title: alias.username,
+        message: "Edit or remove this username",
+        actions: [
+            (
+                title: "Edit",
+                destructive: false,
+                action: {
+                    let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+
+                    let editCtrl = biogramPrompt(
+                        title: "Username",
+                        text: "Edit username",
+                        value: alias.username,
+                        placeholder: "@username",
+                        actionTitle: presentationData.strings.Common_Done,
+                        cancelTitle: presentationData.strings.Common_Cancel,
+                        action: { value in
+                            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                            guard !trimmed.isEmpty else {
+                                return false
                             }
-                        )
-                        presentControllerImpl?(editCtrl, nil)
-                    }),
-                    TextAlertAction(type: .destructiveAction, title: "Delete", action: {
-                        BiogramManager.shared.removeAlias(alias) {
-                            Queue.mainQueue().async { updateState() }
+
+                            BiogramManager.shared.replaceAlias(
+                                id: alias.id,
+                                username: trimmed
+                            ) {
+                                Queue.mainQueue().async {
+                                    updateState()
+                                }
+                            }
+
+                            updateState()
+                            return true
                         }
-                        updateState()
-                    })
-                ]
+                    )
+
+                    presentControllerImpl?(editCtrl, nil)
+                }
+            ),
+            (
+                title: "Delete",
+                destructive: true,
+                action: {
+                    BiogramManager.shared.removeAlias(id: alias.id) {
+                        Queue.mainQueue().async {
+                            updateState()
+                        }
+                    }
+
+                    updateState()
+                }
             )
-            presentControllerImpl?(alert, nil)
-        },
+        ]
+    )
+
+    presentControllerImpl?(alert, nil)
+},
         toggleColor: { enabled in
             let current = BiogramManager.shared.profileColor ?? BiogramProfileColor.presets[0].1
             BiogramManager.shared.setProfileColor(current, enabled: enabled) {
@@ -582,70 +632,136 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
             }
             updateState()
         },
-        pickBrightness: {
-            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-            let steps: [(String, Double)] = [
-                ("30%", 0.3),
-                ("50%", 0.5),
-                ("70%", 0.7),
-                ("85%", 0.85),
-                ("100%", 1.0),
-                ("115%", 1.15),
-                ("120%", 1.2)
-            ]
-            var actions: [TextAlertAction] = [
-                TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {})
-            ]
-            for (title, value) in steps {
-                actions.append(TextAlertAction(type: .defaultAction, title: title, action: {
+pickBrightness: {
+    let alert = BiogramActionsAlertController(
+        title: "Brightness",
+        message: "Choose shade intensity",
+        actions: [
+            (
+                title: "30%",
+                destructive: false,
+                action: {
                     guard var color = BiogramManager.shared.profileColor else { return }
-                    color.brightness = value
+                    color.brightness = 0.3
                     BiogramManager.shared.setProfileColor(color, enabled: true) {
                         Queue.mainQueue().async { updateState() }
                     }
                     updateState()
-                }))
-            }
-            let alert = textAlertController(
-                context: context,
-                title: "Brightness",
-                text: "Choose shade intensity",
-                actions: actions
+                }
+            ),
+            (
+                title: "50%",
+                destructive: false,
+                action: {
+                    guard var color = BiogramManager.shared.profileColor else { return }
+                    color.brightness = 0.5
+                    BiogramManager.shared.setProfileColor(color, enabled: true) {
+                        Queue.mainQueue().async { updateState() }
+                    }
+                    updateState()
+                }
+            ),
+            (
+                title: "70%",
+                destructive: false,
+                action: {
+                    guard var color = BiogramManager.shared.profileColor else { return }
+                    color.brightness = 0.7
+                    BiogramManager.shared.setProfileColor(color, enabled: true) {
+                        Queue.mainQueue().async { updateState() }
+                    }
+                    updateState()
+                }
+            ),
+            (
+                title: "85%",
+                destructive: false,
+                action: {
+                    guard var color = BiogramManager.shared.profileColor else { return }
+                    color.brightness = 0.85
+                    BiogramManager.shared.setProfileColor(color, enabled: true) {
+                        Queue.mainQueue().async { updateState() }
+                    }
+                    updateState()
+                }
+            ),
+            (
+                title: "100%",
+                destructive: false,
+                action: {
+                    guard var color = BiogramManager.shared.profileColor else { return }
+                    color.brightness = 1.0
+                    BiogramManager.shared.setProfileColor(color, enabled: true) {
+                        Queue.mainQueue().async { updateState() }
+                    }
+                    updateState()
+                }
+            ),
+            (
+                title: "115%",
+                destructive: false,
+                action: {
+                    guard var color = BiogramManager.shared.profileColor else { return }
+                    color.brightness = 1.15
+                    BiogramManager.shared.setProfileColor(color, enabled: true) {
+                        Queue.mainQueue().async { updateState() }
+                    }
+                    updateState()
+                }
+            ),
+            (
+                title: "120%",
+                destructive: false,
+                action: {
+                    guard var color = BiogramManager.shared.profileColor else { return }
+                    color.brightness = 1.2
+                    BiogramManager.shared.setProfileColor(color, enabled: true) {
+                        Queue.mainQueue().async { updateState() }
+                    }
+                    updateState()
+                }
             )
-            presentControllerImpl?(alert, nil)
-        },
+        ]
+    )
+
+    presentControllerImpl?(alert, nil)
+},
         removeCollectible: { id in
             BiogramManager.shared.removeCollectible(id: id) {
                 Queue.mainQueue().async { updateState() }
             }
             updateState()
         },
-        browseCatalog: {
-            var actions: [TextAlertAction] = [
-                TextAlertAction(type: .genericAction, title: "Cancel", action: {})
-            ]
-            for item in BiogramGiftCatalog.items {
-                actions.append(TextAlertAction(type: .defaultAction, title: item.title, action: {
-                    let collectible = BiogramCollectible(
-                        title: item.title,
-                        assetFilename: item.slug,
-                        assetType: "gift",
-                        giftSlug: item.slug
-                    )
-                    BiogramManager.shared.addCollectible(collectible) {
-                        Queue.mainQueue().async { updateState() }
-                    }
-                    updateState()
-                }))
+ browseCatalog: {
+    var giftActions: [(title: String, destructive: Bool, action: () -> Void)] = []
+
+    for item in BiogramGiftCatalog.items {
+        giftActions.append((
+            title: item.title,
+            destructive: false,
+            action: {
+                let collectible = BiogramCollectible(
+                    title: item.title,
+                    assetFilename: item.slug,
+                    assetType: "gift",
+                    giftSlug: item.slug
+                )
+                BiogramManager.shared.addCollectible(collectible) {
+                    Queue.mainQueue().async { updateState() }
+                }
+                updateState()
             }
-            let alert = textAlertController(
-                context: context,
-                title: "Gift Catalog",
-                text: "Choose a gift to add locally",
-                actions: actions
-            )
-            presentControllerImpl?(alert, nil)
-        }
+        ))
+    }
+
+    let alert = BiogramActionsAlertController(
+        title: "Gift Catalog",
+        message: "Choose a gift to add locally",
+        actions: giftActions
+    )
+
+    presentControllerImpl?(alert, nil)
+}
     )
     let signal = combineLatest(
         queue: .mainQueue(),
