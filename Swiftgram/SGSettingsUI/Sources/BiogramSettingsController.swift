@@ -427,14 +427,14 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
     
     var presentControllerImpl: ((ViewController, Any?) -> Void)?
     
-    let arguments = BiogramArguments(
+        let arguments = BiogramArguments(
         togglePremium: { enabled in
             BiogramManager.shared.setLocalPremiumEnabled(enabled) {
                 Queue.mainQueue().async { updateState() }
             }
             updateState()
         },
-addNumber: {
+        addNumber: {
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
             let controller = biogramPrompt(
                 title: "Enter number",
@@ -456,11 +456,7 @@ addNumber: {
             )
             presentControllerImpl?(controller, nil)
         },
-            )
-            dismissImpl = { [weak controller] in controller?.dismiss() }
-            presentControllerImpl?(controller, nil)
-        },
-editOrRemoveNumber: { number in
+        editOrRemoveNumber: { number in
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
             let alert = textAlertController(
                 context: context,
@@ -500,29 +496,26 @@ editOrRemoveNumber: { number in
         },
         addAlias: {
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-            var dismissImpl: (() -> Void)?
-            let controller = promptController(
-                sharedContext: context.sharedContext,
-                updatedPresentationData: nil,
-                text: "Alias / username (without @)",
+            let controller = biogramPrompt(
                 title: "Enter username",
+                text: "Alias / username (without @)",
                 value: "",
                 placeholder: "username",
                 actionTitle: presentationData.strings.Common_Done,
                 cancelTitle: presentationData.strings.Common_Cancel,
                 action: { value in
-                    let trimmed = value.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
-                    if trimmed.hasPrefix("@") { trimmed = String(trimmed.dropFirst()) }
+                    var trimmed = value.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+                    if trimmed.hasPrefix("@") {
+                        trimmed = String(trimmed.dropFirst())
+                    }
                     guard !trimmed.isEmpty else { return false }
                     BiogramManager.shared.addAlias(trimmed) {
                         Queue.mainQueue().async { updateState() }
                     }
                     updateState()
-                    dismissImpl?()
                     return true
                 }
             )
-            dismissImpl = { [weak controller] in controller?.dismiss() }
             presentControllerImpl?(controller, nil)
         },
         editOrRemoveAlias: { alias in
@@ -534,29 +527,26 @@ editOrRemoveNumber: { number in
                 actions: [
                     TextAlertAction(type: .genericAction, title: "Cancel", action: {}),
                     TextAlertAction(type: .defaultAction, title: "Edit", action: {
-                        var dismissImpl: (() -> Void)?
-                        let editCtrl = promptController(
-                            sharedContext: context.sharedContext,
-                            updatedPresentationData: nil,
-                            text: "Edit alias (without @)",
+                        let editCtrl = biogramPrompt(
                             title: "Username",
+                            text: "Edit alias (without @)",
                             value: alias,
                             placeholder: "username",
                             actionTitle: presentationData.strings.Common_Done,
                             cancelTitle: presentationData.strings.Common_Cancel,
                             action: { value in
-                                let trimmed = value.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
-                                if trimmed.hasPrefix("@") { trimmed = String(trimmed.dropFirst()) }
+                                var trimmed = value.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+                                if trimmed.hasPrefix("@") {
+                                    trimmed = String(trimmed.dropFirst())
+                                }
                                 guard !trimmed.isEmpty else { return false }
                                 BiogramManager.shared.replaceAlias(old: alias, new: trimmed) {
                                     Queue.mainQueue().async { updateState() }
                                 }
                                 updateState()
-                                dismissImpl?()
                                 return true
                             }
                         )
-                        dismissImpl = { [weak editCtrl] in editCtrl?.dismiss() }
                         presentControllerImpl?(editCtrl, nil)
                     }),
                     TextAlertAction(type: .destructiveAction, title: "Delete", action: {
@@ -584,7 +574,7 @@ editOrRemoveNumber: { number in
             }
             updateState()
         },
-                setBrightness: { value in
+        setBrightness: { value in
             guard var color = BiogramManager.shared.profileColor else { return }
             color.brightness = value
             BiogramManager.shared.setProfileColor(color, enabled: true) {
