@@ -101,28 +101,122 @@ public struct BiogramCustomizations: Codable, Equatable {
     }
 }
 
-/// Каталог «как TG gifts» — локальные названия, без сервера
+/// Каталог Telegram gifts — локальный выбор для профиля
 public enum BiogramGiftCatalog {
-    public static let items: [(slug: String, title: String)] = [
-        ("delicious_cake", "Delicious Cake"),
-        ("green_star", "Green Star"),
-        ("blue_star", "Blue Star"),
-        ("red_star", "Red Star"),
-        ("gift_box", "Gift Box"),
-        ("diamond", "Diamond"),
-        ("trophy", "Trophy"),
-        ("rocket", "Rocket"),
-        ("heart", "Heart"),
-        ("bear", "Bear"),
-        ("flower", "Flower"),
-        ("champagne", "Champagne"),
-        ("lol_pop", "Lol Pop"),
-        ("hypno_lollipop", "Hypno Lollipop"),
-        ("eternal_rose", "Eternal Rose"),
-        ("precious_peach", "Precious Peach"),
-        ("spiced_wine", "Spiced Wine"),
-        ("jelly_bunny", "Jelly Bunny"),
-        ("durovs_cap", "Durov's Cap"),
-        ("swiss_watch", "Swiss Watch"),
-    ]
+    public struct Item: Equatable {
+        public let slug: String
+        public let title: String
+        /// Когда появится — id стикера для отрисовки
+        public let stickerFileId: Int64?
+        
+        public init(slug: String, title: String, stickerFileId: Int64? = nil) {
+            self.slug = slug
+            self.title = title
+            self.stickerFileId = stickerFileId
+        }
+    }
+    
+    private static func slug(_ title: String) -> String {
+        title
+            .lowercased()
+            .replacingOccurrences(of: "'", with: "")
+            .replacingOccurrences(of: " ", with: "_")
+            .replacingOccurrences(of: "-", with: "_")
+    }
+    
+    public static let items: [Item] = [
+        "Heart Locket",
+        "Plush Pepe",
+        "Durov's Cap",
+        "Precious Peach",
+        "Heroic Helmet",
+        "Mighty Arm",
+        "Ion Gem",
+        "Nail Bracelet",
+        "Perfume Bottle",
+        "Mini Oscar",
+        "Magic Potion",
+        "Astral Shard",
+        "Gem Signet",
+        "Genie Lamp",
+        "Bonded Ring",
+        "Sharp Tongue",
+        "Electric Skull",
+        "Westside Sign",
+        "Kissed Frog",
+        "Loot Bag",
+        "Neko Helmet",
+        "Signet Ring",
+        "Sleigh Bell",
+        "Mad Pumpkin",
+        "Love Candle",
+        "Scared Cat",
+        "Skull Flower",
+        "Low Rider",
+        "Flying Broom",
+        "Tama Gadget",
+        "Snow Mittens",
+        "Snow Globe",
+        "Top Hat",
+        "Swiss Watch",
+        "Crystal Ball",
+        "Love Potion",
+        "Vintage Cigar",
+        "Diamond Ring",
+        "Hanging Star",
+        "Eternal Candle",
+        "Voodoo Doll",
+        "Trapped Heart",
+        "Record Player",
+        "Hex Pot",
+        "Toy Bear",
+        "Eternal Rose",
+        "Jack-in-the-Box",
+        "Star Notepad",
+        "Witch Hat",
+        "Lunar Snake",
+        "Winter Wreath",
+        "Restless Jar",
+        "Spiced Wine",
+        "Santa Hat",
+        "Holiday Drink",
+        "Sakura Flower",
+        "Berry Box",
+        "Spy Agaric",
+        "Bunny Muffin",
+        "Hypno Lollipop",
+        "B-Day Candle",
+        "Evil Eye",
+        "Jester Hat",
+        "Big Year",
+        "Easter Egg",
+        "Jingle Bells",
+        "Light Sword",
+        "Cookie Heart",
+        "Party Sparkler",
+        "Ginger Cookie",
+        "Snake Box",
+        "Jelly Bunny",
+        "Candy Cane",
+        "Pet Snake",
+        "Homemade Cake",
+        "Bow Tie",
+        "Lol Pop",
+        "Desk Calendar",
+        "Snoop Dogg",
+        "Snoop Cigar",
+        "Jolly Chimp",
+        "Input Key",
+        "Whip Cupcake",
+        "Lush Bouquet",
+        "Joyful Bundle",
+        "Sky Stilettos",
+        "Ionic Dryer",
+        "Valentine Box",
+        "Cupid Charm",
+        "Instant Ramen",
+        "Artisan Brick",
+    ].map { title in
+        Item(slug: slug(title), title: title)
+    }
 }
