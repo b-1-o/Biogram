@@ -146,6 +146,14 @@ public final class BiogramStorage {
         }
     }
 
+public func replaceCollectibles(_ items: [BiogramCollectible], completion: (() -> Void)? = nil) {
+    queue.async {
+        self.payload.collectibles = items
+        self.saveSync()
+        completion?()
+    }
+}
+
     // MARK: - Save/Load
 
     private func saveSync() {
