@@ -272,8 +272,19 @@ func infoItems(
             }
         }
         
-        // === Biogram: локальные collectibles ===
-        // === Biogram: локальные collectibles (сетка) ===
+// === Biogram: Banner ===
+if isMyProfile {
+    if let bannerImage = BiogramManager.shared.bannerImage() {
+        items[currentPeerInfoSection]!.append(
+            PeerInfoScreenBiogramBannerItem(
+                id: 9498,
+                image: bannerImage,
+                height: BiogramManager.shared.bannerHeight   // ← берём из настроек
+            )
+        )
+    }
+}
+// === Biogram: локальные collectibles (сетка) — оставляем, просто не включай ===
 if isMyProfile {
     let collectibles = BiogramManager.shared.collectibles()
     if !collectibles.isEmpty {
