@@ -64,7 +64,6 @@ private final class BiogramActionsAlertController: ViewController {
             while let presented = top.presentedViewController {
                 top = presented
             }
-            // iPad: якорь обязателен для actionSheet
             if let pop = alert.popoverPresentationController {
                 pop.sourceView = top.view
                 pop.sourceRect = CGRect(
@@ -91,6 +90,7 @@ private final class BiogramTextInputController: ViewController {
     private let placeholder: String
     private let actionTitle: String
     private let cancelTitle: String
+    private let keyboardType: UIKeyboardType
     private let onAction: (String) -> Bool
 
     private var textField: UITextField?
@@ -102,6 +102,7 @@ private final class BiogramTextInputController: ViewController {
         placeholder: String,
         actionTitle: String,
         cancelTitle: String,
+        keyboardType: UIKeyboardType = .default,
         action: @escaping (String) -> Bool
     ) {
         self.titleText = title
@@ -110,6 +111,7 @@ private final class BiogramTextInputController: ViewController {
         self.placeholder = placeholder
         self.actionTitle = actionTitle
         self.cancelTitle = cancelTitle
+        self.keyboardType = keyboardType
         self.onAction = action
         super.init(navigationBarPresentationData: nil)
         self.statusBar.statusBarStyle = .Ignore
@@ -128,7 +130,7 @@ private final class BiogramTextInputController: ViewController {
             guard let self = self else { return }
             tf.text = self.initialValue
             tf.placeholder = self.placeholder
-            tf.keyboardType = .URL
+            tf.keyboardType = self.keyboardType
             tf.autocapitalizationType = .none
             tf.autocorrectionType = .no
             self.textField = tf
@@ -167,6 +169,7 @@ private func biogramPrompt(
     placeholder: String,
     actionTitle: String,
     cancelTitle: String,
+    keyboardType: UIKeyboardType = .default,
     action: @escaping (String) -> Bool
 ) -> ViewController {
     return BiogramTextInputController(
@@ -176,6 +179,7 @@ private func biogramPrompt(
         placeholder: placeholder,
         actionTitle: actionTitle,
         cancelTitle: cancelTitle,
+        keyboardType: keyboardType,
         action: action
     )
 }
@@ -527,6 +531,7 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
                 placeholder: "+888 00001212",
                 actionTitle: presentationData.strings.Common_Done,
                 cancelTitle: presentationData.strings.Common_Cancel,
+                keyboardType: .default,
                 action: { value in
                     let trimmed = value.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
                     guard !trimmed.isEmpty else { return false }
@@ -557,6 +562,7 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
                                 placeholder: "+888 ...",
                                 actionTitle: presentationData.strings.Common_Done,
                                 cancelTitle: presentationData.strings.Common_Cancel,
+                                keyboardType: .default,
                                 action: { value in
                                     let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
                                     guard !trimmed.isEmpty else { return false }
@@ -597,6 +603,7 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
                 placeholder: "username",
                 actionTitle: presentationData.strings.Common_Done,
                 cancelTitle: presentationData.strings.Common_Cancel,
+                keyboardType: .default,
                 action: { value in
                     var trimmed = value.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
                     if trimmed.hasPrefix("@") {
@@ -629,6 +636,7 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
                                 placeholder: "username",
                                 actionTitle: presentationData.strings.Common_Done,
                                 cancelTitle: presentationData.strings.Common_Cancel,
+                                keyboardType: .default,
                                 action: { value in
                                     var trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
                                     if trimmed.hasPrefix("@") {
@@ -718,6 +726,7 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
                 placeholder: "https://t.me/nft/VoodooDoll-319",
                 actionTitle: presentationData.strings.Common_Done,
                 cancelTitle: presentationData.strings.Common_Cancel,
+                keyboardType: .URL,
                 action: { value in
                     let ok = BiogramManager.shared.addCollectibleFromGiftLink(value) {
                         Queue.mainQueue().async { updateState() }
