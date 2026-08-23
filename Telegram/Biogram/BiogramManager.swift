@@ -3,22 +3,22 @@ import UIKit
 
 /// Singleton manager that exposes current Biogram state to the app.
 /// Keeps a local-only overlay state. No network interception or server-side changes.
-
 public final class BiogramManager {
     public static let shared = BiogramManager()
 
     private let storage: BiogramStorage
 
-    // In-memory caches (kept in sync with storage)
+    // In-memory caches
     private var cachedCustomizations: BiogramCustomizations
     private var cachedAliases: [String]
     private var cachedVirtualNumbers: [BiogramVirtualNumber]
     private var cachedCollectibles: [BiogramCollectible]
     private var cachedBanner: BiogramBanner?
+    private var cachedBannerImage: UIImage?
 
     private init(storageBase: URL? = nil) {
         self.storage = BiogramStorage(baseDirectory: storageBase)
-        // initialize caches synchronously by reading storage via semaphores on init
+
         let group = DispatchGroup()
 
         group.enter()
@@ -65,6 +65,15 @@ public final class BiogramManager {
         }
         group.wait()
         self.cachedBanner = localBanner
+
+        // Загружаем картинку баннера в кэш
+        if let banner = localBanner {
+            let url = Self.bannersDirectory().appendingPathComponent(banner.localFilename)
+            if let data = try? Data(contentsOf: url),
+               let image = UIImage(data: data) {
+                self.cachedBannerImage = image
+            }
+        }
     }
 
     // MARK: - Read accessors
@@ -89,7 +98,15 @@ public final class BiogramManager {
         return cachedBanner
     }
 
-    // MARK: - Mutations (update storage + cache)
+    public func bannerImage() -> UIImage? {
+        return cachedBannerImage
+    }
+
+    public var bannerHeight: CGFloat {
+        return CGFloat(cachedCustomizations.bannerHeight)
+    }
+
+    // MARK: - Mutations
 
     public func setLocalPremiumEnabled(_ enabled: Bool, completion: (() -> Void)? = nil) {
         var custom = cachedCustomizations
@@ -168,8 +185,7 @@ public final class BiogramManager {
     }
 
     // MARK: - Gifts from NFT link
-    
-    /// Добавить gift по ссылке или slug (без resolve стикера — только локальная запись)
+
     @discardableResult
     public func addCollectibleFromGiftLink(_ input: String, completion: (() -> Void)? = nil) -> Bool {
         guard let slug = BiogramGiftLink.slug(from: input) else {
@@ -190,8 +206,7 @@ public final class BiogramManager {
         addCollectible(item, completion: completion)
         return true
     }
-    
-    /// Переставить collectible (для смены порядка в сетке)
+
     public func moveCollectible(from fromIndex: Int, to toIndex: Int, completion: (() -> Void)? = nil) {
         guard fromIndex != toIndex,
               fromIndex >= 0, fromIndex < cachedCollectibles.count,
@@ -203,13 +218,20 @@ public final class BiogramManager {
         cachedCollectibles.insert(item, at: toIndex)
         storage.replaceCollectibles(cachedCollectibles, completion: completion)
     }
-    
+
     public func replaceCollectibles(_ items: [BiogramCollectible], completion: (() -> Void)? = nil) {
         cachedCollectibles = items
         storage.replaceCollectibles(items, completion: completion)
     }
 
     // MARK: - Banner
+
+    public func setBannerHeight(_ height: CGFloat, completion: (() -> Void)? = nil) {
+        var custom = cachedCustomizations
+        custom.bannerHeight = Double(max(60, min(400, height)))
+        cachedCustomizations = custom
+        storage.setCustomizations(custom, completion: completion)
+    }
 
     public func bannerFileURL() -> URL? {
         guard let name = cachedBanner?.localFilename else { return nil }
@@ -222,6 +244,9 @@ public final class BiogramManager {
             try? FileManager.default.removeItem(at: oldURL)
         }
         cachedBanner = banner
+        if banner == nil {
+            cachedBannerImage = nil
+        }
         storage.setBanner(banner, completion: completion)
     }
 
@@ -231,20 +256,23 @@ public final class BiogramManager {
             try? FileManager.default.removeItem(at: url)
         }
         cachedBanner = nil
+        cachedBannerImage = nil
         storage.setBanner(nil, completion: completion)
     }
 
     @discardableResult
     public func saveBannerImage(
         _ image: UIImage,
-        aspectRatio: String,
+        aspectRatio: String = "free",
         completion: (() -> Void)? = nil
     ) -> Bool {
         let dir = Self.bannersDirectory()
-        try? FileManager.default.createDirectory(
-            at: dir,
-            withIntermediateDirectories: true
-        )
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        // удаляем старый файл
+        if let oldName = cachedBanner?.localFilename {
+            try? FileManager.default.removeItem(at: dir.appendingPathComponent(oldName))
+        }
 
         let filename = "banner_\(UUID().uuidString).jpg"
         let url = dir.appendingPathComponent(filename)
@@ -261,25 +289,25 @@ public final class BiogramManager {
             return false
         }
 
-        let item = BiogramBanner(
-            localFilename: filename,
-            aspectRatio: aspectRatio
-        )
-
-        setBanner(item, completion: completion)
+        let item = BiogramBanner(localFilename: filename, aspectRatio: aspectRatio)
+        cachedBanner = item
+        cachedBannerImage = image
+        storage.setBanner(item, completion: completion)
         return true
     }
 
-    private static func bannersDirectory() -> URL {
-        let base = FileManager.default.urls(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask
-        ).first
-        ?? URL(fileURLWithPath: NSTemporaryDirectory())
+    /// Удобный метод: сохранить или удалить
+    public func setBannerImage(_ image: UIImage?, aspectRatio: String = "free", completion: (() -> Void)? = nil) {
+        if let image = image {
+            _ = saveBannerImage(image, aspectRatio: aspectRatio, completion: completion)
+        } else {
+            clearBanner(completion: completion)
+        }
+    }
 
-        return base.appendingPathComponent(
-            "Biogram/banners",
-            isDirectory: true
-        )
+    private static func bannersDirectory() -> URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
+        return base.appendingPathComponent("Biogram/banners", isDirectory: true)
     }
 }
