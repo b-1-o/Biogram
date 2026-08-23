@@ -135,3 +135,24 @@ public enum BiogramGiftLink {
         return nil
     }
 }
+/// Локальный баннер профиля (вместо gifts)
+public struct BiogramBanner: Codable, Equatable {
+    public let id: String
+    /// Имя файла внутри Application Support/Biogram/banners/
+    public var localFilename: String
+    /// Выбранное соотношение: "3:1", "16:9", "4:3", "1:1", "free"
+    public var aspectRatio: String
+    public var createdAt: Date
+
+    public init(
+        id: String = UUID().uuidString,
+        localFilename: String,
+        aspectRatio: String = "3:1",
+        createdAt: Date = Date()
+    ) {
+        self.id = id
+        self.localFilename = localFilename
+        self.aspectRatio = aspectRatio
+        self.createdAt = createdAt
+    }
+}
