@@ -101,122 +101,32 @@ public struct BiogramCustomizations: Codable, Equatable {
     }
 }
 
-/// Каталог Telegram gifts — локальный выбор для профиля
-public enum BiogramGiftCatalog {
-    public struct Item: Equatable {
-        public let slug: String
-        public let title: String
-        /// Когда появится — id стикера для отрисовки
-        public let stickerFileId: Int64?
-        
-        public init(slug: String, title: String, stickerFileId: Int64? = nil) {
-            self.slug = slug
-            self.title = title
-            self.stickerFileId = stickerFileId
+
+/// Парсер ссылок t.me/nft/... → slug (каталог не нужен — добавляем по ссылке)
+public enum BiogramGiftLink {
+    /// "https://t.me/nft/VoodooDoll-319" или "VoodooDoll-319" → "VoodooDoll-319"
+    public static func slug(from input: String) -> String? {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            return nil
         }
-    }
-    
-    private static func slug(_ title: String) -> String {
-        title
-            .lowercased()
-            .replacingOccurrences(of: "'", with: "")
-            .replacingOccurrences(of: " ", with: "_")
-            .replacingOccurrences(of: "-", with: "_")
-    }
-    
-    public static let items: [Item] = [
-        "Heart Locket",
-        "Plush Pepe",
-        "Durov's Cap",
-        "Precious Peach",
-        "Heroic Helmet",
-        "Mighty Arm",
-        "Ion Gem",
-        "Nail Bracelet",
-        "Perfume Bottle",
-        "Mini Oscar",
-        "Magic Potion",
-        "Astral Shard",
-        "Gem Signet",
-        "Genie Lamp",
-        "Bonded Ring",
-        "Sharp Tongue",
-        "Electric Skull",
-        "Westside Sign",
-        "Kissed Frog",
-        "Loot Bag",
-        "Neko Helmet",
-        "Signet Ring",
-        "Sleigh Bell",
-        "Mad Pumpkin",
-        "Love Candle",
-        "Scared Cat",
-        "Skull Flower",
-        "Low Rider",
-        "Flying Broom",
-        "Tama Gadget",
-        "Snow Mittens",
-        "Snow Globe",
-        "Top Hat",
-        "Swiss Watch",
-        "Crystal Ball",
-        "Love Potion",
-        "Vintage Cigar",
-        "Diamond Ring",
-        "Hanging Star",
-        "Eternal Candle",
-        "Voodoo Doll",
-        "Trapped Heart",
-        "Record Player",
-        "Hex Pot",
-        "Toy Bear",
-        "Eternal Rose",
-        "Jack-in-the-Box",
-        "Star Notepad",
-        "Witch Hat",
-        "Lunar Snake",
-        "Winter Wreath",
-        "Restless Jar",
-        "Spiced Wine",
-        "Santa Hat",
-        "Holiday Drink",
-        "Sakura Flower",
-        "Berry Box",
-        "Spy Agaric",
-        "Bunny Muffin",
-        "Hypno Lollipop",
-        "B-Day Candle",
-        "Evil Eye",
-        "Jester Hat",
-        "Big Year",
-        "Easter Egg",
-        "Jingle Bells",
-        "Light Sword",
-        "Cookie Heart",
-        "Party Sparkler",
-        "Ginger Cookie",
-        "Snake Box",
-        "Jelly Bunny",
-        "Candy Cane",
-        "Pet Snake",
-        "Homemade Cake",
-        "Bow Tie",
-        "Lol Pop",
-        "Desk Calendar",
-        "Snoop Dogg",
-        "Snoop Cigar",
-        "Jolly Chimp",
-        "Input Key",
-        "Whip Cupcake",
-        "Lush Bouquet",
-        "Joyful Bundle",
-        "Sky Stilettos",
-        "Ionic Dryer",
-        "Valentine Box",
-        "Cupid Charm",
-        "Instant Ramen",
-        "Artisan Brick",
-    ].map { title in
-        Item(slug: slug(title), title: title)
+        
+        if !trimmed.contains("/"), !trimmed.contains(" ") {
+            return trimmed
+        }
+        
+        guard let url = URL(string: trimmed),
+              let host = url.host?.lowercased(),
+              host == "t.me" || host == "telegram.me" || host.hasSuffix(".t.me")
+        else {
+            return nil
+        }
+        
+        let parts = url.path.split(separator: "/").map(String.init)
+        if parts.count >= 2, parts[0].lowercased() == "nft" {
+            let slug = parts[1]
+            return slug.isEmpty ? nil : slug
+        }
+        return nil
     }
 }
