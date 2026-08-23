@@ -240,6 +240,7 @@ private enum BiogramEntryId: Hashable {
     case numbersHeader, number(String), addNumber
     case aliasesHeader, alias(String), addAlias
     case colorHeader, colorToggle, colorPreset(String), colorBrightness
+    case colorPattern(String), colorPatternOpacity
     case collectiblesHeader, collectible(String), addGiftFromLink
     case bannerHeader, bannerPreview, bannerHeight, chooseBanner, removeBanner
     case info
@@ -258,6 +259,8 @@ private enum BiogramEntry: ItemListNodeEntry {
     case colorToggle(Bool)
     case colorPreset(String, BiogramProfileColor, Bool)
     case colorBrightness(Double)
+    case colorPattern(String, String, Bool) // title, key, selected
+    case colorPatternOpacity(Double)
     case collectiblesHeader
     case collectible(Int, BiogramCollectible)
     case addGiftFromLink
@@ -273,7 +276,8 @@ private enum BiogramEntry: ItemListNodeEntry {
         case .premiumHeader, .premiumToggle: return BiogramSection.premium.rawValue
         case .numbersHeader, .number, .addNumber: return BiogramSection.numbers.rawValue
         case .aliasesHeader, .alias, .addAlias: return BiogramSection.aliases.rawValue
-        case .colorHeader, .colorToggle, .colorPreset, .colorBrightness: return BiogramSection.color.rawValue
+        case .colorHeader, .colorToggle, .colorPreset, .colorBrightness, .colorPattern, .colorPatternOpacity:
+            return BiogramSection.color.rawValue
         case .collectiblesHeader, .collectible, .addGiftFromLink: return BiogramSection.collectibles.rawValue
         case .bannerHeader, .bannerPreview, .bannerHeight, .chooseBanner, .removeBanner: return BiogramSection.banner.rawValue
         case .info: return BiogramSection.info.rawValue
@@ -294,6 +298,8 @@ private enum BiogramEntry: ItemListNodeEntry {
         case .colorToggle: return .colorToggle
         case let .colorPreset(name, _, _): return .colorPreset(name)
         case .colorBrightness: return .colorBrightness
+        case let .colorPattern(_, key, _): return .colorPattern(key)
+        case .colorPatternOpacity: return .colorPatternOpacity
         case .collectiblesHeader: return .collectiblesHeader
         case let .collectible(_, c): return .collectible(c.id)
         case .addGiftFromLink: return .addGiftFromLink
@@ -340,6 +346,10 @@ private enum BiogramEntry: ItemListNodeEntry {
             return ItemListDisclosureItem(presentationData: presentationData, title: name, label: selected ? "✓" : "", sectionId: self.section, style: .blocks, action: { arguments.selectPreset(color) })
         case let .colorBrightness(value):
             return ItemListDisclosureItem(presentationData: presentationData, title: "Brightness", label: "\(Int((value * 100).rounded()))%", sectionId: self.section, style: .blocks, action: { arguments.pickBrightness() })
+        case let .colorPattern(title, key, selected):
+            return ItemListDisclosureItem(presentationData: presentationData, title: title, label: selected ? "✓" : "", sectionId: self.section, style: .blocks, action: { arguments.selectPattern(key) })
+        case let .colorPatternOpacity(value):
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Pattern opacity", label: "\(Int((value * 100).rounded()))%", sectionId: self.section, style: .blocks, action: { arguments.pickPatternOpacity() })
         case .collectiblesHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "COLLECTIBLES / GIFTS", sectionId: self.section)
         case let .collectible(_, item):
@@ -373,6 +383,8 @@ private final class BiogramArguments {
     let selectPreset: (BiogramProfileColor) -> Void
     let setBrightness: (Double) -> Void
     let pickBrightness: () -> Void
+    let selectPattern: (String) -> Void
+    let pickPatternOpacity: () -> Void
     let removeCollectible: (String) -> Void
     let addGiftFromLink: () -> Void
     let chooseBanner: () -> Void
@@ -389,6 +401,8 @@ private final class BiogramArguments {
         selectPreset: @escaping (BiogramProfileColor) -> Void,
         setBrightness: @escaping (Double) -> Void,
         pickBrightness: @escaping () -> Void,
+        selectPattern: @escaping (String) -> Void,
+        pickPatternOpacity: @escaping () -> Void,
         removeCollectible: @escaping (String) -> Void,
         addGiftFromLink: @escaping () -> Void,
         chooseBanner: @escaping () -> Void,
@@ -404,6 +418,8 @@ private final class BiogramArguments {
         self.selectPreset = selectPreset
         self.setBrightness = setBrightness
         self.pickBrightness = pickBrightness
+        self.selectPattern = selectPattern
+        self.pickPatternOpacity = pickPatternOpacity
         self.removeCollectible = removeCollectible
         self.addGiftFromLink = addGiftFromLink
         self.chooseBanner = chooseBanner
@@ -438,6 +454,15 @@ private func biogramControllerEntries(state: BiogramControllerState) -> [Biogram
             entries.append(.colorPreset(name, preset, selected))
         }
         entries.append(.colorBrightness(current?.brightness ?? 1.0))
+        
+        // Patterns
+        let currentPattern = current?.pattern ?? "none"
+        for (title, key) in BiogramProfileColor.patterns {
+            entries.append(.colorPattern(title, key, currentPattern == key))
+        }
+        if currentPattern != "none" {
+            entries.append(.colorPatternOpacity(current?.patternOpacity ?? 0.25))
+        }
     }
     
     entries.append(.collectiblesHeader)
@@ -572,8 +597,15 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
             }
         },
         selectPreset: { color in
-            let brightness = BiogramManager.shared.profileColor?.brightness ?? 1.0
-            let newColor = BiogramProfileColor(r: color.r, g: color.g, b: color.b, brightness: brightness)
+            let existing = BiogramManager.shared.profileColor
+            let newColor = BiogramProfileColor(
+                r: color.r,
+                g: color.g,
+                b: color.b,
+                brightness: existing?.brightness ?? 1.0,
+                pattern: existing?.pattern ?? "none",
+                patternOpacity: existing?.patternOpacity ?? 0.25
+            )
             BiogramManager.shared.setProfileColor(newColor, enabled: true) {
                 Queue.mainQueue().async { updateState() }
             }
@@ -590,6 +622,32 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
                 (title: "\(Int(value * 100))%", destructive: false, action: {
                     guard var color = BiogramManager.shared.profileColor else { return }
                     color.brightness = value
+                    BiogramManager.shared.setProfileColor(color, enabled: true) {
+                        Queue.mainQueue().async { updateState() }
+                    }
+                })
+            })
+            presentControllerImpl?(alert, nil)
+        },
+        selectPattern: { key in
+            guard var color = BiogramManager.shared.profileColor else {
+                var c = BiogramProfileColor.presets[0].1
+                c.pattern = key
+                BiogramManager.shared.setProfileColor(c, enabled: true) {
+                    Queue.mainQueue().async { updateState() }
+                }
+                return
+            }
+            color.pattern = key
+            BiogramManager.shared.setProfileColor(color, enabled: true) {
+                Queue.mainQueue().async { updateState() }
+            }
+        },
+        pickPatternOpacity: {
+            let alert = BiogramActionsAlertController(title: "Pattern opacity", message: "How visible the pattern is", actions: [0.1, 0.15, 0.25, 0.35, 0.5, 0.7].map { value in
+                (title: "\(Int(value * 100))%", destructive: false, action: {
+                    guard var color = BiogramManager.shared.profileColor else { return }
+                    color.patternOpacity = value
                     BiogramManager.shared.setProfileColor(color, enabled: true) {
                         Queue.mainQueue().async { updateState() }
                     }
@@ -616,8 +674,6 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
             }
             presentControllerImpl?(controller, nil)
         },
-        
-        // === BANNER — исправлены лаги ===
         chooseBanner: {
             let picker = UIImagePickerController()
             picker.sourceType = .photoLibrary
@@ -626,25 +682,17 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
             
             BannerPickerDelegate.shared.onPicked = { image in
                 guard let image = image else { return }
-                
                 BiogramManager.shared.setBannerImage(image) {
-                    Queue.mainQueue().async {
-                        updateState()
-                    }
+                    Queue.mainQueue().async { updateState() }
                 }
             }
-            
             presentControllerImpl?(PickerWrapper(picker: picker), nil)
         },
-        
         removeBanner: {
             BiogramManager.shared.setBannerImage(nil) {
-                Queue.mainQueue().async {
-                    updateState()
-                }
+                Queue.mainQueue().async { updateState() }
             }
         },
-        
         pickBannerHeight: {
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
             let controller = biogramPrompt(
@@ -659,11 +707,8 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
                 guard let h = Double(value.trimmingCharacters(in: .whitespaces)), h >= 60, h <= 400 else {
                     return false
                 }
-                
                 BiogramManager.shared.setBannerHeight(CGFloat(h)) {
-                    Queue.mainQueue().async {
-                        updateState()
-                    }
+                    Queue.mainQueue().async { updateState() }
                 }
                 return true
             }
