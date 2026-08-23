@@ -25,6 +25,8 @@ swift_library(
         "//submodules/TextFormat",
         "//submodules/AvatarNode",
         "//submodules/Components/BundleIconComponent",
+
+        "//Telegram:Biogram",
     ],
     visibility = [
         "//visibility:public",
