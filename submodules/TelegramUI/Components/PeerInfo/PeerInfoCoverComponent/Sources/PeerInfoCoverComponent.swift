@@ -13,13 +13,13 @@ import EmojiTextAttachmentView
 import LokiRng
 import AvatarNode
 import BundleIconComponent
+import Biogram
 
 private final class PatternContentsTarget: MultiAnimationRenderTarget {
     private let imageUpdated: (Bool) -> Void
     
     init(imageUpdated: @escaping (Bool) -> Void) {
         self.imageUpdated = imageUpdated
-        
         super.init()
     }
     
@@ -40,7 +40,6 @@ private func windowFunction(t: CGFloat) -> CGFloat {
 
 private func patternScaleValueAt(fraction: CGFloat, t: CGFloat, reverse: Bool) -> CGFloat {
     let windowSize: CGFloat = 0.8
-
     let effectiveT: CGFloat
     let windowStartOffset: CGFloat
     let windowEndOffset: CGFloat
@@ -53,11 +52,9 @@ private func patternScaleValueAt(fraction: CGFloat, t: CGFloat, reverse: Bool) -
         windowStartOffset = -windowSize
         windowEndOffset = 1.0
     }
-
     let windowPosition = (1.0 - fraction) * windowStartOffset + fraction * windowEndOffset
     let windowT = max(0.0, min(windowSize, effectiveT - windowPosition)) / windowSize
     let localT = 1.0 - windowFunction(t: windowT)
-
     return localT
 }
 
@@ -123,6 +120,7 @@ public final class PeerInfoCoverComponent: Component {
             }
         }
     }
+    
     public let context: AccountContext
     public let subject: Subject?
     public let files: [Int64: TelegramMediaFile]
@@ -168,45 +166,19 @@ public final class PeerInfoCoverComponent: Component {
     }
     
     public static func ==(lhs: PeerInfoCoverComponent, rhs: PeerInfoCoverComponent) -> Bool {
-        if lhs.context !== rhs.context {
-            return false
-        }
-        if lhs.subject != rhs.subject {
-            return false
-        }
-        if lhs.files != rhs.files {
-            return false
-        }
-        if lhs.isDark != rhs.isDark {
-            return false
-        }
-        if lhs.avatarCenter != rhs.avatarCenter {
-            return false
-        }
-        if lhs.avatarSize != rhs.avatarSize {
-            return false
-        }
-        if lhs.avatarScale != rhs.avatarScale {
-            return false
-        }
-        if lhs.defaultHeight != rhs.defaultHeight {
-            return false
-        }
-        if lhs.gradientOnTop != rhs.gradientOnTop {
-            return false
-        }
-        if lhs.gradientCenter != rhs.gradientCenter {
-            return false
-        }
-        if lhs.avatarTransitionFraction != rhs.avatarTransitionFraction {
-            return false
-        }
-        if lhs.patternTransitionFraction != rhs.patternTransitionFraction {
-            return false
-        }
-        if lhs.patternIconScale != rhs.patternIconScale {
-            return false
-        }
+        if lhs.context !== rhs.context { return false }
+        if lhs.subject != rhs.subject { return false }
+        if lhs.files != rhs.files { return false }
+        if lhs.isDark != rhs.isDark { return false }
+        if lhs.avatarCenter != rhs.avatarCenter { return false }
+        if lhs.avatarSize != rhs.avatarSize { return false }
+        if lhs.avatarScale != rhs.avatarScale { return false }
+        if lhs.defaultHeight != rhs.defaultHeight { return false }
+        if lhs.gradientOnTop != rhs.gradientOnTop { return false }
+        if lhs.gradientCenter != rhs.gradientCenter { return false }
+        if lhs.avatarTransitionFraction != rhs.avatarTransitionFraction { return false }
+        if lhs.patternTransitionFraction != rhs.patternTransitionFraction { return false }
+        if lhs.patternIconScale != rhs.patternIconScale { return false }
         return true
     }
     
@@ -217,6 +189,7 @@ public final class PeerInfoCoverComponent: Component {
         private let avatarBackgroundPatternMaskLayer: SimpleLayer
         private let avatarBackgroundGradientLayer: SimpleGradientLayer
         private let backgroundPatternContainer: UIView
+        private let biogramPatternView = UIView()
         private var logoIcon: ComponentView<Empty>?
         
         private var currentSize: CGSize?
@@ -258,6 +231,12 @@ public final class PeerInfoCoverComponent: Component {
             self.clipsToBounds = true
             
             self.addSubview(self.backgroundView)
+            
+            self.biogramPatternView.isUserInteractionEnabled = false
+            self.biogramPatternView.backgroundColor = .clear
+            self.biogramPatternView.isHidden = true
+            self.addSubview(self.biogramPatternView)
+            
             self.layer.addSublayer(self.backgroundGradientLayer)
             self.layer.addSublayer(self.avatarBackgroundGradientLayer)
             
@@ -309,7 +288,7 @@ public final class PeerInfoCoverComponent: Component {
                 backgroundSnapshotLayer.backgroundColor = self.backgroundView.backgroundColor?.cgColor
                 backgroundSnapshotLayer.frame = self.backgroundView.frame
                 self.layer.insertSublayer(backgroundSnapshotLayer, above: self.backgroundGradientLayer)
-               
+                
                 gradientSnapshotLayer.frame = self.backgroundGradientLayer.convert(self.backgroundGradientLayer.bounds, to: self.backgroundView.layer)
                 backgroundSnapshotLayer.addSublayer(gradientSnapshotLayer)
                 
@@ -338,7 +317,7 @@ public final class PeerInfoCoverComponent: Component {
                 backgroundSnapshotLayer.backgroundColor = self.backgroundView.backgroundColor?.cgColor
                 backgroundSnapshotLayer.frame = self.backgroundView.frame
                 self.layer.insertSublayer(backgroundSnapshotLayer, above: self.backgroundGradientLayer)
-               
+                
                 backgroundSnapshotLayer.animateAlpha(from: 1.0, to: 0.0, duration: 0.25, removeOnCompletion: false, completion: { _ in
                     backgroundSnapshotLayer.removeFromSuperlayer()
                 })
@@ -409,7 +388,6 @@ public final class PeerInfoCoverComponent: Component {
             let image = self.patternContentsTarget?.contents
             for patternContentLayer in self.avatarPatternContentLayers {
                 patternContentLayer.contents = image
-                
                 if image != nil && animated {
                     patternContentLayer.animateAlpha(from: 0.0, to: 1.0, duration: 0.25)
                 }
@@ -420,14 +398,12 @@ public final class PeerInfoCoverComponent: Component {
             let previousComponent = self.component
             self.component = component
             self.currentSize = availableSize
-                        
+            
             if previousComponent?.subject?.fileId != component.subject?.fileId {
                 if let fileId = component.subject?.fileId, fileId != 0 {
                     if self.patternContentsTarget == nil {
                         self.patternContentsTarget = PatternContentsTarget(imageUpdated: { [weak self] hadContents in
-                            guard let self else {
-                                return
-                            }
+                            guard let self else { return }
                             self.updatePatternLayerImages(animated: !hadContents)
                         })
                     }
@@ -443,9 +419,7 @@ public final class PeerInfoCoverComponent: Component {
                     } else {
                         self.patternFileDisposable = (component.context.engine.stickers.resolveInlineStickers(fileIds: [fileId])
                         |> deliverOnMainQueue).startStrict(next: { [weak self] files in
-                            guard let self else {
-                                return
-                            }
+                            guard let self else { return }
                             if let file = files[fileId] {
                                 self.patternFile = file
                                 self.loadPatternFromFile()
@@ -462,9 +436,7 @@ public final class PeerInfoCoverComponent: Component {
             } else if case .managedBot = component.subject {
                 if self.patternContentsTarget == nil {
                     self.patternContentsTarget = PatternContentsTarget(imageUpdated: { [weak self] hadContents in
-                        guard let self else {
-                            return
-                        }
+                        guard let self else { return }
                         self.updatePatternLayerImages(animated: !hadContents)
                     })
                 }
@@ -472,11 +444,11 @@ public final class PeerInfoCoverComponent: Component {
                     self.loadPatternFromFile()
                 }
             }
-        
+            
             self.state = state
             
-            let backgroundColor: UIColor
-            let secondaryBackgroundColor: UIColor
+            var backgroundColor: UIColor
+            var secondaryBackgroundColor: UIColor
             
             if let subject = component.subject, let colors = subject.colors(context: component.context, isDark: component.isDark) {
                 backgroundColor = colors.0
@@ -485,6 +457,20 @@ public final class PeerInfoCoverComponent: Component {
                 backgroundColor = .clear
                 secondaryBackgroundColor = .clear
             }
+            
+            // === Biogram local profile color + pattern ===
+            var biogramPatternKey: String = "none"
+            var biogramPatternOpacity: CGFloat = 0.25
+            
+            if BiogramManager.shared.profileColorEnabled,
+               let pc = BiogramManager.shared.profileColor {
+                let c = BiogramPatternImage.uiColor(from: pc)
+                backgroundColor = c
+                secondaryBackgroundColor = c
+                biogramPatternKey = pc.pattern
+                biogramPatternOpacity = CGFloat(pc.patternOpacity)
+            }
+            // ============================================
             
             let gradientWidth: CGFloat
             let gradientHeight: CGFloat = component.defaultHeight
@@ -525,7 +511,23 @@ public final class PeerInfoCoverComponent: Component {
             
             let backgroundFrame = CGRect(origin: CGPoint(x: 0.0, y: -1000.0 + availableSize.height), size: CGSize(width: availableSize.width, height: 1000.0))
             transition.containedViewLayoutTransition.updateFrameAdditive(view: self.backgroundView, frame: backgroundFrame)
-                        
+            
+            // Biogram pattern overlay
+            self.biogramPatternView.frame = CGRect(x: 0, y: 0, width: availableSize.width, height: availableSize.height)
+            if biogramPatternKey != "none",
+               let patternImage = BiogramPatternImage.make(
+                    pattern: biogramPatternKey,
+                    color: .white,
+                    opacity: biogramPatternOpacity,
+                    tileSize: 44
+               ) {
+                self.biogramPatternView.backgroundColor = UIColor(patternImage: patternImage)
+                self.biogramPatternView.isHidden = false
+            } else {
+                self.biogramPatternView.backgroundColor = .clear
+                self.biogramPatternView.isHidden = true
+            }
+            
             var patternWidth: CGFloat = 380.0
             if case .managedBot = component.subject {
                 patternWidth = min(380.0, availableSize.width - 32.0)
@@ -547,7 +549,7 @@ public final class PeerInfoCoverComponent: Component {
                     patternColor.withAlphaComponent(0.0).cgColor
                 ]
             } else {
-                if component.subject?.colors(context: component.context, isDark: component.isDark) != nil {
+                if component.subject?.colors(context: component.context, isDark: component.isDark) != nil || BiogramManager.shared.profileColorEnabled {
                     self.avatarBackgroundPatternContentsLayer.compositingFilter = "overlayBlendMode"
                     self.avatarBackgroundPatternContentsLayer.colors = [
                         UIColor(white: 0.0, alpha: 0.6).cgColor,
@@ -567,7 +569,7 @@ public final class PeerInfoCoverComponent: Component {
             case .custom, .status, .managedBot:
                 self.avatarBackgroundGradientLayer.isHidden = true
             default:
-                self.avatarBackgroundGradientLayer.isHidden = component.subject?.colors(context: component.context, isDark: component.isDark) == nil
+                self.avatarBackgroundGradientLayer.isHidden = component.subject?.colors(context: component.context, isDark: component.isDark) == nil && !BiogramManager.shared.profileColorEnabled
             }
             transition.setFrame(layer: self.avatarBackgroundGradientLayer, frame: CGSize(width: 300.0, height: 300.0).centered(around: component.avatarCenter))
             transition.setAlpha(layer: self.avatarBackgroundGradientLayer, alpha: 1.0 - component.avatarTransitionFraction)
