@@ -143,11 +143,53 @@ public final class BiogramManager {
         return cachedCustomizations.profileColor
     }
 
-    public func setProfileColor(_ color: BiogramProfileColor?, enabled: Bool, completion: (() -> Void)? = nil) {
+public func setProfileColor(_ color: BiogramProfileColor?, enabled: Bool, completion: (() -> Void)? = nil) {
         var custom = cachedCustomizations
         custom.profileColor = color
         custom.profileColorEnabled = enabled
         self.cachedCustomizations = custom
         storage.setCustomizations(custom, completion: completion)
+    }
+    
+        // MARK: - Gifts from NFT link
+    
+    /// Добавить gift по ссылке или slug (без resolve стикера — только локальная запись)
+    @discardableResult
+    public func addCollectibleFromGiftLink(_ input: String, completion: (() -> Void)? = nil) -> Bool {
+        guard let slug = BiogramGiftLink.slug(from: input) else {
+            completion?()
+            return false
+        }
+        if cachedCollectibles.contains(where: { $0.giftSlug == slug }) {
+            completion?()
+            return false
+        }
+        let item = BiogramCollectible(
+            title: slug,
+            assetFilename: slug,
+            assetType: "gift",
+            giftSlug: slug,
+            stickerFileId: nil
+        )
+        addCollectible(item, completion: completion)
+        return true
+    }
+    
+    /// Переставить collectible (для смены порядка в сетке)
+    public func moveCollectible(from fromIndex: Int, to toIndex: Int, completion: (() -> Void)? = nil) {
+        guard fromIndex != toIndex,
+              fromIndex >= 0, fromIndex < cachedCollectibles.count,
+              toIndex >= 0, toIndex < cachedCollectibles.count else {
+            completion?()
+            return
+        }
+        let item = cachedCollectibles.remove(at: fromIndex)
+        cachedCollectibles.insert(item, at: toIndex)
+        storage.replaceCollectibles(cachedCollectibles, completion: completion)
+    }
+    
+    public func replaceCollectibles(_ items: [BiogramCollectible], completion: (() -> Void)? = nil) {
+        cachedCollectibles = items
+        storage.replaceCollectibles(items, completion: completion)
     }
 }
