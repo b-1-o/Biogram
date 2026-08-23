@@ -1,12 +1,13 @@
 import Foundation
+import UIKit
 
 /// Simple local storage using Codable + file persistence.
 /// This storage is intentionally tiny and synchronous for simplicity.
 /// All data is local-only (Application support), no server/network interactions.
-
 public final class BiogramStorage {
     private let queue = DispatchQueue(label: "org.biogram.storage", qos: .utility)
     private let storageURL: URL
+    private let folderURL: URL
 
     public struct StoragePayload: Codable {
         public var customizations: BiogramCustomizations
@@ -15,26 +16,32 @@ public final class BiogramStorage {
         public var collectibles: [BiogramCollectible]
         public var banner: BiogramBanner?
 
-public init(
-    customizations: BiogramCustomizations = BiogramCustomizations(),
-    aliases: [String] = [],
-    virtualNumbers: [BiogramVirtualNumber] = [],
-    collectibles: [BiogramCollectible] = [],
-    banner: BiogramBanner? = nil
-) {
-    self.customizations = customizations
-    self.aliases = aliases
-    self.virtualNumbers = virtualNumbers
-    self.collectibles = collectibles
-    self.banner = banner
-}
+        public init(
+            customizations: BiogramCustomizations = BiogramCustomizations(),
+            aliases: [String] = [],
+            virtualNumbers: [BiogramVirtualNumber] = [],
+            collectibles: [BiogramCollectible] = [],
+            banner: BiogramBanner? = nil
+        ) {
+            self.customizations = customizations
+            self.aliases = aliases
+            self.virtualNumbers = virtualNumbers
+            self.collectibles = collectibles
+            self.banner = banner
+        }
+    }
 
     private var payload: StoragePayload
 
     public init(baseDirectory: URL? = nil) {
-        let base = baseDirectory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSTemporaryDirectory())
+        let base = baseDirectory
+            ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
+
         let folder = base.appendingPathComponent("Biogram", isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true, attributes: nil)
+
+        self.folderURL = folder
         self.storageURL = folder.appendingPathComponent("biogram.json", isDirectory: false)
 
         if let data = try? Data(contentsOf: self.storageURL),
@@ -69,6 +76,28 @@ public init(
     public func getCollectibles(completion: @escaping ([BiogramCollectible]) -> Void) {
         queue.async {
             completion(self.payload.collectibles)
+        }
+    }
+
+    public func getBanner(completion: @escaping (BiogramBanner?) -> Void) {
+        queue.async {
+            completion(self.payload.banner)
+        }
+    }
+
+    public func getBannerImage(completion: @escaping (UIImage?) -> Void) {
+        queue.async {
+            guard let banner = self.payload.banner else {
+                completion(nil)
+                return
+            }
+            let imageURL = self.folderURL.appendingPathComponent(banner.localFilename)
+            guard let data = try? Data(contentsOf: imageURL),
+                  let image = UIImage(data: data) else {
+                completion(nil)
+                return
+            }
+            completion(image)
         }
     }
 
@@ -148,27 +177,54 @@ public init(
         }
     }
 
-public func replaceCollectibles(_ items: [BiogramCollectible], completion: (() -> Void)? = nil) {
-    queue.async {
-        self.payload.collectibles = items
-        self.saveSync()
-        completion?()
+    public func replaceCollectibles(_ items: [BiogramCollectible], completion: (() -> Void)? = nil) {
+        queue.async {
+            self.payload.collectibles = items
+            self.saveSync()
+            completion?()
+        }
     }
-}
-        
-public func getBanner(completion: @escaping (BiogramBanner?) -> Void) {
-    queue.async {
-        completion(self.payload.banner)
-    }
-}
 
-public func setBanner(_ banner: BiogramBanner?, completion: (() -> Void)? = nil) {
-    queue.async {
-        self.payload.banner = banner
-        self.saveSync()
-        completion?()
+    public func setBanner(_ banner: BiogramBanner?, completion: (() -> Void)? = nil) {
+        queue.async {
+            // удаляем старый файл картинки, если был
+            if let old = self.payload.banner {
+                let oldURL = self.folderURL.appendingPathComponent(old.localFilename)
+                try? FileManager.default.removeItem(at: oldURL)
+            }
+            self.payload.banner = banner
+            self.saveSync()
+            completion?()
+        }
     }
-}
+
+    /// Сохранить картинку + метаданные баннера
+    public func setBanner(image: UIImage?, aspectRatio: String = "free", completion: (() -> Void)? = nil) {
+        queue.async {
+            // удаляем старый файл
+            if let old = self.payload.banner {
+                let oldURL = self.folderURL.appendingPathComponent(old.localFilename)
+                try? FileManager.default.removeItem(at: oldURL)
+            }
+
+            guard let image = image,
+                  let jpeg = image.jpegData(compressionQuality: 0.88) else {
+                self.payload.banner = nil
+                self.saveSync()
+                completion?()
+                return
+            }
+
+            let filename = "banner_\(UUID().uuidString).jpg"
+            let imageURL = self.folderURL.appendingPathComponent(filename)
+            try? jpeg.write(to: imageURL, options: [.atomic])
+
+            let banner = BiogramBanner(localFilename: filename, aspectRatio: aspectRatio)
+            self.payload.banner = banner
+            self.saveSync()
+            completion?()
+        }
+    }
 
     // MARK: - Save/Load
 
