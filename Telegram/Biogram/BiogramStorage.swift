@@ -13,19 +13,21 @@ public final class BiogramStorage {
         public var aliases: [String]
         public var virtualNumbers: [BiogramVirtualNumber]
         public var collectibles: [BiogramCollectible]
+        public var banner: BiogramBanner?
 
-        public init(
-            customizations: BiogramCustomizations = BiogramCustomizations(),
-            aliases: [String] = [],
-            virtualNumbers: [BiogramVirtualNumber] = [],
-            collectibles: [BiogramCollectible] = []
-        ) {
-            self.customizations = customizations
-            self.aliases = aliases
-            self.virtualNumbers = virtualNumbers
-            self.collectibles = collectibles
-        }
-    }
+public init(
+    customizations: BiogramCustomizations = BiogramCustomizations(),
+    aliases: [String] = [],
+    virtualNumbers: [BiogramVirtualNumber] = [],
+    collectibles: [BiogramCollectible] = [],
+    banner: BiogramBanner? = nil
+) {
+    self.customizations = customizations
+    self.aliases = aliases
+    self.virtualNumbers = virtualNumbers
+    self.collectibles = collectibles
+    self.banner = banner
+}
 
     private var payload: StoragePayload
 
@@ -149,6 +151,20 @@ public final class BiogramStorage {
 public func replaceCollectibles(_ items: [BiogramCollectible], completion: (() -> Void)? = nil) {
     queue.async {
         self.payload.collectibles = items
+        self.saveSync()
+        completion?()
+    }
+}
+        
+public func getBanner(completion: @escaping (BiogramBanner?) -> Void) {
+    queue.async {
+        completion(self.payload.banner)
+    }
+}
+
+public func setBanner(_ banner: BiogramBanner?, completion: (() -> Void)? = nil) {
+    queue.async {
+        self.payload.banner = banner
         self.saveSync()
         completion?()
     }
