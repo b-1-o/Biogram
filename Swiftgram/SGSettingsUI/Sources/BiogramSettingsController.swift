@@ -16,7 +16,7 @@ private final class BiogramActionsAlertController: ViewController {
     private let titleText: String
     private let messageText: String?
     private let actions: [(title: String, destructive: Bool, action: () -> Void)]
-
+    
     init(title: String, message: String?, actions: [(title: String, destructive: Bool, action: () -> Void)]) {
         self.titleText = title
         self.messageText = message
@@ -24,13 +24,13 @@ private final class BiogramActionsAlertController: ViewController {
         super.init(navigationBarPresentationData: nil)
         self.statusBar.statusBarStyle = .Ignore
     }
-
+    
     required init(coder aDecoder: NSCoder) { fatalError() }
-
+    
     override func loadDisplayNode() {
         self.displayNode = ASDisplayNode()
         self.displayNode.backgroundColor = UIColor.black.withAlphaComponent(0.4)
-
+        
         let alert = UIAlertController(title: titleText, message: messageText, preferredStyle: .actionSheet)
         for item in actions {
             alert.addAction(UIAlertAction(title: item.title, style: item.destructive ? .destructive : .default, handler: { [weak self] _ in
@@ -41,7 +41,7 @@ private final class BiogramActionsAlertController: ViewController {
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: { [weak self] _ in
             self?.close()
         }))
-
+        
         Queue.mainQueue().after(0.05) { [weak self] in
             guard let self = self else { return }
             guard let root = self.view.window?.rootViewController else { return }
@@ -55,7 +55,7 @@ private final class BiogramActionsAlertController: ViewController {
             top.present(alert, animated: true)
         }
     }
-
+    
     private func close() { self.dismiss(animated: false) }
 }
 
@@ -69,7 +69,7 @@ private final class BiogramTextInputController: ViewController {
     private let keyboardType: UIKeyboardType
     private let onAction: (String) -> Bool
     private var textField: UITextField?
-
+    
     init(title: String, text: String, value: String, placeholder: String, actionTitle: String, cancelTitle: String, keyboardType: UIKeyboardType = .default, action: @escaping (String) -> Bool) {
         self.titleText = title
         self.messageText = text
@@ -82,13 +82,13 @@ private final class BiogramTextInputController: ViewController {
         super.init(navigationBarPresentationData: nil)
         self.statusBar.statusBarStyle = .Ignore
     }
-
+    
     required init(coder aDecoder: NSCoder) { fatalError() }
-
+    
     override func loadDisplayNode() {
         self.displayNode = ASDisplayNode()
         self.displayNode.backgroundColor = UIColor.black.withAlphaComponent(0.4)
-
+        
         let alert = UIAlertController(title: titleText, message: messageText, preferredStyle: .alert)
         alert.addTextField { [weak self] tf in
             guard let self = self else { return }
@@ -104,7 +104,7 @@ private final class BiogramTextInputController: ViewController {
             guard let self = self else { return }
             if self.onAction(self.textField?.text ?? "") { self.close() }
         }))
-
+        
         Queue.mainQueue().after(0.05) { [weak self] in
             guard let self = self else { return }
             guard let root = self.view.window?.rootViewController else { return }
@@ -113,7 +113,7 @@ private final class BiogramTextInputController: ViewController {
             top.present(alert, animated: true)
         }
     }
-
+    
     private func close() { self.dismiss(animated: false) }
 }
 
@@ -133,13 +133,13 @@ private func biogramPrompt(
 private final class BannerPickerDelegate: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
     static let shared = BannerPickerDelegate()
     var onPicked: ((UIImage?) -> Void)?
-
+    
     func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
         let image = (info[.editedImage] as? UIImage) ?? (info[.originalImage] as? UIImage)
         onPicked?(image)
         picker.dismiss(animated: true)
     }
-
+    
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
         picker.dismiss(animated: true)
     }
@@ -147,15 +147,15 @@ private final class BannerPickerDelegate: NSObject, UIImagePickerControllerDeleg
 
 private final class PickerWrapper: ViewController {
     private let picker: UIImagePickerController
-
+    
     init(picker: UIImagePickerController) {
         self.picker = picker
         super.init(navigationBarPresentationData: nil)
         statusBar.statusBarStyle = .Ignore
     }
-
+    
     required init(coder: NSCoder) { fatalError() }
-
+    
     override func loadDisplayNode() {
         displayNode = ASDisplayNode()
         displayNode.backgroundColor = .clear
@@ -189,7 +189,7 @@ private final class BiogramControllerState: Equatable {
     let profileColor: BiogramProfileColor?
     let hasBanner: Bool
     let bannerHeight: CGFloat
-
+    
     init(
         premiumEnabled: Bool,
         numbers: [BiogramVirtualNumber],
@@ -209,7 +209,7 @@ private final class BiogramControllerState: Equatable {
         self.hasBanner = hasBanner
         self.bannerHeight = bannerHeight
     }
-
+    
     static func == (lhs: BiogramControllerState, rhs: BiogramControllerState) -> Bool {
         return lhs.premiumEnabled == rhs.premiumEnabled
             && lhs.numbers == rhs.numbers
@@ -220,7 +220,7 @@ private final class BiogramControllerState: Equatable {
             && lhs.hasBanner == rhs.hasBanner
             && lhs.bannerHeight == rhs.bannerHeight
     }
-
+    
     static func current() -> BiogramControllerState {
         return BiogramControllerState(
             premiumEnabled: BiogramManager.shared.localPremiumEnabled,
@@ -267,7 +267,7 @@ private enum BiogramEntry: ItemListNodeEntry {
     case chooseBanner
     case removeBanner
     case info
-
+    
     var section: ItemListSectionId {
         switch self {
         case .premiumHeader, .premiumToggle: return BiogramSection.premium.rawValue
@@ -279,7 +279,7 @@ private enum BiogramEntry: ItemListNodeEntry {
         case .info: return BiogramSection.info.rawValue
         }
     }
-
+    
     var stableId: BiogramEntryId {
         switch self {
         case .premiumHeader: return .premiumHeader
@@ -305,13 +305,12 @@ private enum BiogramEntry: ItemListNodeEntry {
         case .info: return .info
         }
     }
-
+    
     static func < (lhs: BiogramEntry, rhs: BiogramEntry) -> Bool {
         if lhs.section != rhs.section { return lhs.section < rhs.section }
-        // упрощённо — по порядку case
         return false
     }
-
+    
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! BiogramArguments
         switch self {
@@ -348,8 +347,6 @@ private enum BiogramEntry: ItemListNodeEntry {
             return ItemListDisclosureItem(presentationData: presentationData, title: title, label: "Tap to remove", sectionId: self.section, style: .blocks, action: { arguments.removeCollectible(item.id) })
         case .addGiftFromLink:
             return ItemListActionItem(presentationData: presentationData, title: "Add Gift by Link", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: { arguments.addGiftFromLink() })
-
-        // === BANNER ===
         case .bannerHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "PROFILE BANNER", sectionId: self.section)
         case let .bannerPreview(hasImage):
@@ -360,7 +357,6 @@ private enum BiogramEntry: ItemListNodeEntry {
             return ItemListActionItem(presentationData: presentationData, title: "Choose from Gallery", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: { arguments.chooseBanner() })
         case .removeBanner:
             return ItemListActionItem(presentationData: presentationData, title: "Remove Banner", kind: .destructive, alignment: .natural, sectionId: self.section, style: .blocks, action: { arguments.removeBanner() })
-
         case .info:
             return ItemListTextItem(presentationData: presentationData, text: .plain("Local-only. Visible only in this client. Not sent to Telegram servers."), sectionId: self.section)
         }
@@ -382,7 +378,7 @@ private final class BiogramArguments {
     let chooseBanner: () -> Void
     let removeBanner: () -> Void
     let pickBannerHeight: () -> Void
-
+    
     init(
         togglePremium: @escaping (Bool) -> Void,
         addNumber: @escaping () -> Void,
@@ -418,18 +414,18 @@ private final class BiogramArguments {
 
 private func biogramControllerEntries(state: BiogramControllerState) -> [BiogramEntry] {
     var entries: [BiogramEntry] = []
-
+    
     entries.append(.premiumHeader)
     entries.append(.premiumToggle(state.premiumEnabled))
-
+    
     entries.append(.numbersHeader)
     for (i, n) in state.numbers.enumerated() { entries.append(.number(i, n)) }
     entries.append(.addNumber)
-
+    
     entries.append(.aliasesHeader)
     for (i, a) in state.aliases.enumerated() { entries.append(.alias(i, a)) }
     entries.append(.addAlias)
-
+    
     entries.append(.colorHeader)
     entries.append(.colorToggle(state.profileColorEnabled))
     if state.profileColorEnabled {
@@ -443,11 +439,11 @@ private func biogramControllerEntries(state: BiogramControllerState) -> [Biogram
         }
         entries.append(.colorBrightness(current?.brightness ?? 1.0))
     }
-
+    
     entries.append(.collectiblesHeader)
     for (i, c) in state.collectibles.enumerated() { entries.append(.collectible(i, c)) }
     entries.append(.addGiftFromLink)
-
+    
     // Banner
     entries.append(.bannerHeader)
     entries.append(.bannerPreview(state.hasBanner))
@@ -456,23 +452,29 @@ private func biogramControllerEntries(state: BiogramControllerState) -> [Biogram
     if state.hasBanner {
         entries.append(.removeBanner)
     }
-
+    
     entries.append(.info)
     return entries
 }
 
 public func biogramSettingsController(context: AccountContext) -> ViewController {
+    
+    // === Biogram: подгружаем настройки текущего аккаунта ===
+    let accountId = String(context.account.peerId.id)
+    BiogramManager.shared.switchToAccount(accountId: accountId)
+    // ========================================================
+    
     let statePromise = ValuePromise(BiogramControllerState.current(), ignoreRepeated: true)
     let stateValue = Atomic(value: BiogramControllerState.current())
-
+    
     let updateState: (() -> Void) = {
         let newState = BiogramControllerState.current()
         _ = stateValue.swap(newState)
         statePromise.set(newState)
     }
-
+    
     var presentControllerImpl: ((ViewController, Any?) -> Void)?
-
+    
     let arguments = BiogramArguments(
         togglePremium: { enabled in
             BiogramManager.shared.setLocalPremiumEnabled(enabled) { Queue.mainQueue().async { updateState() } }
@@ -605,7 +607,6 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
             }
             presentControllerImpl?(controller, nil)
         },
-        // === BANNER actions ===
         chooseBanner: {
             let picker = UIImagePickerController()
             picker.sourceType = .photoLibrary
@@ -646,7 +647,7 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
             presentControllerImpl?(controller, nil)
         }
     )
-
+    
     let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, statePromise.get())
     |> map { presentationData, state -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let entries = biogramControllerEntries(state: state)
@@ -667,7 +668,7 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
         )
         return (controllerState, (listState, arguments))
     }
-
+    
     let controller = ItemListController(context: context, state: signal)
     presentControllerImpl = { [weak controller] c, a in
         controller?.present(c, in: .window(.root), with: a)
