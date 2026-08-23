@@ -7,9 +7,7 @@ public struct BiogramCollectible: Codable, Equatable {
     public var assetFilename: String
     public var assetType: String
     public var createdAt: Date
-    /// Telegram gift slug (например VoodooDoll-319)
     public var giftSlug: String?
-    /// id стикера для отрисовки в профиле
     public var stickerFileId: Int64?
 
     public init(
@@ -53,11 +51,9 @@ public struct BiogramVirtualNumber: Codable, Equatable {
 }
 
 public struct BiogramProfileColor: Codable, Equatable {
-    /// 0...1 RGB
     public var r: Double
     public var g: Double
     public var b: Double
-    /// 0...1 brightness multiplier
     public var brightness: Double
 
     public init(r: Double, g: Double, b: Double, brightness: Double = 1.0) {
@@ -88,6 +84,8 @@ public struct BiogramCustomizations: Codable, Equatable {
     public var localAliases: [String]
     public var profileColor: BiogramProfileColor?
     public var profileColorEnabled: Bool
+    /// Высота баннера в pt
+    public var bannerHeight: Double
 
     public init(
         localPremiumEnabled: Bool = false,
@@ -95,7 +93,8 @@ public struct BiogramCustomizations: Codable, Equatable {
         badgeStyle: String? = "stars",
         localAliases: [String] = [],
         profileColor: BiogramProfileColor? = nil,
-        profileColorEnabled: Bool = false
+        profileColorEnabled: Bool = false,
+        bannerHeight: Double = 140.0
     ) {
         self.localPremiumEnabled = localPremiumEnabled
         self.showPremiumBadge = showPremiumBadge
@@ -103,29 +102,20 @@ public struct BiogramCustomizations: Codable, Equatable {
         self.localAliases = localAliases
         self.profileColor = profileColor
         self.profileColorEnabled = profileColorEnabled
+        self.bannerHeight = bannerHeight
     }
 }
 
-/// Парсер ссылок t.me/nft/... → slug
 public enum BiogramGiftLink {
-    /// "https://t.me/nft/VoodooDoll-319" или "VoodooDoll-319" → "VoodooDoll-319"
     public static func slug(from input: String) -> String? {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
-            return nil
-        }
-
-        // Просто slug без URL
-        if !trimmed.contains("/"), !trimmed.contains(" ") {
-            return trimmed
-        }
+        if trimmed.isEmpty { return nil }
+        if !trimmed.contains("/"), !trimmed.contains(" ") { return trimmed }
 
         guard let url = URL(string: trimmed),
               let host = url.host?.lowercased(),
               host == "t.me" || host == "telegram.me" || host.hasSuffix(".t.me")
-        else {
-            return nil
-        }
+        else { return nil }
 
         let parts = url.path.split(separator: "/").map(String.init)
         if parts.count >= 2, parts[0].lowercased() == "nft" {
@@ -135,24 +125,14 @@ public enum BiogramGiftLink {
         return nil
     }
 }
-/// Локальный баннер профиля (вместо gifts)
+
+/// Локальный баннер профиля
 public struct BiogramBanner: Codable, Equatable {
     public let id: String
-    /// Имя файла внутри Application Support/Biogram/banners/
+    /// Имя файла внутри Application Support/Biogram/
     public var localFilename: String
-    /// Выбранное соотношение: "3:1", "16:9", "4:3", "1:1", "free"
+    /// "3:1", "16:9", "4:3", "1:1", "free"
     public var aspectRatio: String
     public var createdAt: Date
 
     public init(
-        id: String = UUID().uuidString,
-        localFilename: String,
-        aspectRatio: String = "3:1",
-        createdAt: Date = Date()
-    ) {
-        self.id = id
-        self.localFilename = localFilename
-        self.aspectRatio = aspectRatio
-        self.createdAt = createdAt
-    }
-}
