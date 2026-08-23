@@ -477,8 +477,9 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
     
     let arguments = BiogramArguments(
         togglePremium: { enabled in
-            BiogramManager.shared.setLocalPremiumEnabled(enabled) { Queue.mainQueue().async { updateState() } }
-            updateState()
+            BiogramManager.shared.setLocalPremiumEnabled(enabled) {
+                Queue.mainQueue().async { updateState() }
+            }
         },
         addNumber: {
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
@@ -492,7 +493,6 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
                 BiogramManager.shared.addVirtualNumber(BiogramVirtualNumber(number: trimmed)) {
                     Queue.mainQueue().async { updateState() }
                 }
-                updateState()
                 return true
             }
             presentControllerImpl?(controller, nil)
@@ -510,14 +510,14 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
                         BiogramManager.shared.updateVirtualNumber(id: number.id, number: trimmed, label: number.label) {
                             Queue.mainQueue().async { updateState() }
                         }
-                        updateState()
                         return true
                     }
                     presentControllerImpl?(editCtrl, nil)
                 }),
                 (title: "Delete", destructive: true, action: {
-                    BiogramManager.shared.removeVirtualNumber(id: number.id) { Queue.mainQueue().async { updateState() } }
-                    updateState()
+                    BiogramManager.shared.removeVirtualNumber(id: number.id) {
+                        Queue.mainQueue().async { updateState() }
+                    }
                 })
             ])
             presentControllerImpl?(alert, nil)
@@ -532,8 +532,9 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
                 var trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
                 if trimmed.hasPrefix("@") { trimmed = String(trimmed.dropFirst()) }
                 guard !trimmed.isEmpty else { return false }
-                BiogramManager.shared.addAlias(trimmed) { Queue.mainQueue().async { updateState() } }
-                updateState()
+                BiogramManager.shared.addAlias(trimmed) {
+                    Queue.mainQueue().async { updateState() }
+                }
                 return true
             }
             presentControllerImpl?(controller, nil)
@@ -549,50 +550,57 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
                         var trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
                         if trimmed.hasPrefix("@") { trimmed = String(trimmed.dropFirst()) }
                         guard !trimmed.isEmpty else { return false }
-                        BiogramManager.shared.replaceAlias(old: alias, new: trimmed) { Queue.mainQueue().async { updateState() } }
-                        updateState()
+                        BiogramManager.shared.replaceAlias(old: alias, new: trimmed) {
+                            Queue.mainQueue().async { updateState() }
+                        }
                         return true
                     }
                     presentControllerImpl?(editCtrl, nil)
                 }),
                 (title: "Delete", destructive: true, action: {
-                    BiogramManager.shared.removeAlias(alias) { Queue.mainQueue().async { updateState() } }
-                    updateState()
+                    BiogramManager.shared.removeAlias(alias) {
+                        Queue.mainQueue().async { updateState() }
+                    }
                 })
             ])
             presentControllerImpl?(alert, nil)
         },
         toggleColor: { enabled in
             let current = BiogramManager.shared.profileColor ?? BiogramProfileColor.presets[0].1
-            BiogramManager.shared.setProfileColor(current, enabled: enabled) { Queue.mainQueue().async { updateState() } }
-            updateState()
+            BiogramManager.shared.setProfileColor(current, enabled: enabled) {
+                Queue.mainQueue().async { updateState() }
+            }
         },
         selectPreset: { color in
             let brightness = BiogramManager.shared.profileColor?.brightness ?? 1.0
             let newColor = BiogramProfileColor(r: color.r, g: color.g, b: color.b, brightness: brightness)
-            BiogramManager.shared.setProfileColor(newColor, enabled: true) { Queue.mainQueue().async { updateState() } }
-            updateState()
+            BiogramManager.shared.setProfileColor(newColor, enabled: true) {
+                Queue.mainQueue().async { updateState() }
+            }
         },
         setBrightness: { value in
             guard var color = BiogramManager.shared.profileColor else { return }
             color.brightness = value
-            BiogramManager.shared.setProfileColor(color, enabled: true) { Queue.mainQueue().async { updateState() } }
-            updateState()
+            BiogramManager.shared.setProfileColor(color, enabled: true) {
+                Queue.mainQueue().async { updateState() }
+            }
         },
         pickBrightness: {
             let alert = BiogramActionsAlertController(title: "Brightness", message: "Choose shade intensity", actions: [0.3, 0.5, 0.7, 0.85, 1.0, 1.15, 1.2].map { value in
                 (title: "\(Int(value * 100))%", destructive: false, action: {
                     guard var color = BiogramManager.shared.profileColor else { return }
                     color.brightness = value
-                    BiogramManager.shared.setProfileColor(color, enabled: true) { Queue.mainQueue().async { updateState() } }
-                    updateState()
+                    BiogramManager.shared.setProfileColor(color, enabled: true) {
+                        Queue.mainQueue().async { updateState() }
+                    }
                 })
             })
             presentControllerImpl?(alert, nil)
         },
         removeCollectible: { id in
-            BiogramManager.shared.removeCollectible(id: id) { Queue.mainQueue().async { updateState() } }
-            updateState()
+            BiogramManager.shared.removeCollectible(id: id) {
+                Queue.mainQueue().async { updateState() }
+            }
         },
         addGiftFromLink: {
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
@@ -601,31 +609,42 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
                 placeholder: "https://t.me/nft/VoodooDoll-319", actionTitle: presentationData.strings.Common_Done,
                 cancelTitle: presentationData.strings.Common_Cancel, keyboardType: .URL
             ) { value in
-                let ok = BiogramManager.shared.addCollectibleFromGiftLink(value) { Queue.mainQueue().async { updateState() } }
-                if ok { updateState() }
-                return ok
+                _ = BiogramManager.shared.addCollectibleFromGiftLink(value) {
+                    Queue.mainQueue().async { updateState() }
+                }
+                return true
             }
             presentControllerImpl?(controller, nil)
         },
+        
+        // === BANNER — исправлены лаги ===
         chooseBanner: {
             let picker = UIImagePickerController()
             picker.sourceType = .photoLibrary
             picker.allowsEditing = true
             picker.delegate = BannerPickerDelegate.shared
+            
             BannerPickerDelegate.shared.onPicked = { image in
+                guard let image = image else { return }
+                
                 BiogramManager.shared.setBannerImage(image) {
-                    Queue.mainQueue().async { updateState() }
+                    Queue.mainQueue().async {
+                        updateState()
+                    }
                 }
-                updateState()
             }
+            
             presentControllerImpl?(PickerWrapper(picker: picker), nil)
         },
+        
         removeBanner: {
             BiogramManager.shared.setBannerImage(nil) {
-                Queue.mainQueue().async { updateState() }
+                Queue.mainQueue().async {
+                    updateState()
+                }
             }
-            updateState()
         },
+        
         pickBannerHeight: {
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
             let controller = biogramPrompt(
@@ -637,11 +656,15 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
                 cancelTitle: presentationData.strings.Common_Cancel,
                 keyboardType: .numberPad
             ) { value in
-                guard let h = Double(value.trimmingCharacters(in: .whitespaces)), h >= 60, h <= 400 else { return false }
-                BiogramManager.shared.setBannerHeight(CGFloat(h)) {
-                    Queue.mainQueue().async { updateState() }
+                guard let h = Double(value.trimmingCharacters(in: .whitespaces)), h >= 60, h <= 400 else {
+                    return false
                 }
-                updateState()
+                
+                BiogramManager.shared.setBannerHeight(CGFloat(h)) {
+                    Queue.mainQueue().async {
+                        updateState()
+                    }
+                }
                 return true
             }
             presentControllerImpl?(controller, nil)
