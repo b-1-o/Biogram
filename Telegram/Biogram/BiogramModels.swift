@@ -11,7 +11,7 @@ public struct BiogramCollectible: Codable, Equatable {
     public var giftSlug: String?
     /// id стикера для отрисовки в профиле
     public var stickerFileId: Int64?
-    
+
     public init(
         id: String = UUID().uuidString,
         title: String? = nil,
@@ -67,18 +67,19 @@ public struct BiogramProfileColor: Codable, Equatable {
         self.brightness = brightness
     }
 
-public static let presets: [(String, BiogramProfileColor)] = [
-    ("Blue", BiogramProfileColor(r: 0.25, g: 0.55, b: 0.95)),
-    ("Dark Red", BiogramProfileColor(r: 0.55, g: 0.08, b: 0.12)),
-    ("Purple", BiogramProfileColor(r: 0.55, g: 0.25, b: 0.85)),
-    ("Green", BiogramProfileColor(r: 0.15, g: 0.65, b: 0.40)),
-    ("Orange", BiogramProfileColor(r: 0.95, g: 0.45, b: 0.15)),
-    ("Teal", BiogramProfileColor(r: 0.10, g: 0.70, b: 0.70)),
-    ("Pink", BiogramProfileColor(r: 0.90, g: 0.30, b: 0.55)),
-    ("Gray", BiogramProfileColor(r: 0.45, g: 0.45, b: 0.50)),
-    ("Black", BiogramProfileColor(r: 0.08, g: 0.08, b: 0.10)),
-    ("White", BiogramProfileColor(r: 0.95, g: 0.95, b: 0.97)),
-]
+    public static let presets: [(String, BiogramProfileColor)] = [
+        ("Blue", BiogramProfileColor(r: 0.25, g: 0.55, b: 0.95)),
+        ("Dark Red", BiogramProfileColor(r: 0.55, g: 0.08, b: 0.12)),
+        ("Purple", BiogramProfileColor(r: 0.55, g: 0.25, b: 0.85)),
+        ("Green", BiogramProfileColor(r: 0.15, g: 0.65, b: 0.40)),
+        ("Orange", BiogramProfileColor(r: 0.95, g: 0.45, b: 0.15)),
+        ("Teal", BiogramProfileColor(r: 0.10, g: 0.70, b: 0.70)),
+        ("Pink", BiogramProfileColor(r: 0.90, g: 0.30, b: 0.55)),
+        ("Gray", BiogramProfileColor(r: 0.45, g: 0.45, b: 0.50)),
+        ("Black", BiogramProfileColor(r: 0.08, g: 0.08, b: 0.10)),
+        ("White", BiogramProfileColor(r: 0.95, g: 0.95, b: 0.97)),
+    ]
+}
 
 public struct BiogramCustomizations: Codable, Equatable {
     public var localPremiumEnabled: Bool
@@ -105,8 +106,7 @@ public struct BiogramCustomizations: Codable, Equatable {
     }
 }
 
-
-/// Парсер ссылок t.me/nft/... → slug (каталог не нужен — добавляем по ссылке)
+/// Парсер ссылок t.me/nft/... → slug
 public enum BiogramGiftLink {
     /// "https://t.me/nft/VoodooDoll-319" или "VoodooDoll-319" → "VoodooDoll-319"
     public static func slug(from input: String) -> String? {
@@ -114,18 +114,19 @@ public enum BiogramGiftLink {
         if trimmed.isEmpty {
             return nil
         }
-        
+
+        // Просто slug без URL
         if !trimmed.contains("/"), !trimmed.contains(" ") {
             return trimmed
         }
-        
+
         guard let url = URL(string: trimmed),
               let host = url.host?.lowercased(),
               host == "t.me" || host == "telegram.me" || host.hasSuffix(".t.me")
         else {
             return nil
         }
-        
+
         let parts = url.path.split(separator: "/").map(String.init)
         if parts.count >= 2, parts[0].lowercased() == "nft" {
             let slug = parts[1]
