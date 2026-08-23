@@ -485,7 +485,7 @@ private func biogramControllerEntries(state: BiogramControllerState) -> [Biogram
 public func biogramSettingsController(context: AccountContext) -> ViewController {
     
     // === Biogram: подгружаем настройки текущего аккаунта ===
-    let accountId = String(context.account.peerId.id)
+    let accountId = String(describing: context.account.peerId.id)
     BiogramManager.shared.switchToAccount(accountId: accountId)
     // ========================================================
     
