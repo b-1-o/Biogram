@@ -7,9 +7,11 @@ public struct BiogramCollectible: Codable, Equatable {
     public var assetFilename: String
     public var assetType: String
     public var createdAt: Date
-    /// Telegram gift slug / emoji key if from catalog
+    /// Telegram gift slug (например VoodooDoll-319)
     public var giftSlug: String?
-
+    /// id стикера для отрисовки в профиле
+    public var stickerFileId: Int64?
+    
     public init(
         id: String = UUID().uuidString,
         title: String? = nil,
@@ -17,7 +19,8 @@ public struct BiogramCollectible: Codable, Equatable {
         assetFilename: String,
         assetType: String,
         createdAt: Date = Date(),
-        giftSlug: String? = nil
+        giftSlug: String? = nil,
+        stickerFileId: Int64? = nil
     ) {
         self.id = id
         self.title = title
@@ -26,6 +29,7 @@ public struct BiogramCollectible: Codable, Equatable {
         self.assetType = assetType
         self.createdAt = createdAt
         self.giftSlug = giftSlug
+        self.stickerFileId = stickerFileId
     }
 }
 
