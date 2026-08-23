@@ -16,11 +16,11 @@ public enum BiogramPatternImage {
             let symbol: String
             switch pattern {
             case "skulls":
-                symbol = "☠"      // или "💀"
+                symbol = "𐕣"      // или "💀"
             case "pentagrams":
-                symbol = "⛤"      // пентаграмма
+                symbol = "⛧"      // пентаграмма
             case "stars":
-                symbol = "★"
+                symbol = "♱"
             default:
                 symbol = ""
             }
