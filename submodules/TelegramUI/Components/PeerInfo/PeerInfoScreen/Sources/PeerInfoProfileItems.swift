@@ -273,31 +273,22 @@ func infoItems(
         }
         
         // === Biogram: локальные collectibles ===
-        // === Biogram: локальные collectibles (как подарки) ===
+        // === Biogram: локальные collectibles (сетка) ===
 if isMyProfile {
     let collectibles = BiogramManager.shared.collectibles()
     if !collectibles.isEmpty {
-        // Заголовок секции
         items[currentPeerInfoSection]!.append(
             PeerInfoScreenHeaderItem(
                 id: 9499,
                 text: "Gifts"
             )
         )
-        
-        for (index, item) in collectibles.enumerated() {
-            let title = item.title ?? item.giftSlug ?? item.id
-            items[currentPeerInfoSection]!.append(
-                PeerInfoScreenLabeledValueItem(
-                    id: 9500 + index,
-                    label: "Gift",
-                    text: title,
-                    textColor: .accent,
-                    action: nil,
-                    requestLayout: { _ in }
-                )
+        items[currentPeerInfoSection]!.append(
+            PeerInfoScreenBiogramGiftsItem(
+                id: 9500,
+                collectibles: collectibles
             )
-        }
+        )
     }
 }
         
