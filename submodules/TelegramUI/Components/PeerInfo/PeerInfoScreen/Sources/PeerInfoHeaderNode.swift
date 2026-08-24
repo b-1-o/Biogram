@@ -386,6 +386,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     
     deinit {
         self.emojiStatusPackDisposable.dispose()
+        NotificationCenter.default.removeObserver(self)
     }
     
     override func didLoad() {
@@ -396,6 +397,14 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         
         let phoneGestureRecognizer = UILongPressGestureRecognizer(target: self, action: #selector(self.handlePhoneLongPress(_:)))
         self.subtitleNodeRawContainer.view.addGestureRecognizer(phoneGestureRecognizer)
+
+        NotificationCenter.default.addObserver(
+            forName: .biogramStateDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.requestUpdateLayout?(false)
+        }
     }
     
     @objc private func handleUsernameLongPress(_ gestureRecognizer: UILongPressGestureRecognizer) {
@@ -595,7 +604,16 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             }
         } else {
             backgroundCoverSubject = nil
-        }                               
+        }
+
+        // Biogram: custom banner height for own profile
+        if self.isMyProfile {
+            let h = BiogramManager.shared.bannerHeight
+            if h >= 60.0 && h <= 400.0 {
+                backgroundDefaultHeight = h
+            }
+        }
+
         var currentSavedMusic: TelegramMediaFile?
         if let peer, peer.id != self.context.account.peerId || self.isMyProfile, let screenData {
             if let savedMusicState = screenData.savedMusicState {
