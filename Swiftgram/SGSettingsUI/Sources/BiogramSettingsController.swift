@@ -229,7 +229,7 @@ private final class BiogramControllerState: Equatable {
             collectibles: BiogramManager.shared.collectibles(),
             profileColorEnabled: BiogramManager.shared.profileColorEnabled,
             profileColor: BiogramManager.shared.profileColor,
-            hasBanner: BiogramManager.shared.bannerImage() != nil,
+            hasBanner: BiogramManager.shared.banner() != nil,
             bannerHeight: BiogramManager.shared.bannerHeight
         )
     }
@@ -483,21 +483,23 @@ private func biogramControllerEntries(state: BiogramControllerState) -> [Biogram
 }
 
 public func biogramSettingsController(context: AccountContext) -> ViewController {
-    
-    // === Biogram: подгружаем настройки текущего аккаунта ===
-    let accountId = String(describing: context.account.peerId.id)
-    BiogramManager.shared.switchToAccount(accountId: accountId)
-    // ========================================================
-    
-    let statePromise = ValuePromise(BiogramControllerState.current(), ignoreRepeated: true)
-    let stateValue = Atomic(value: BiogramControllerState.current())
-    
+    let initialState = BiogramControllerState.current()
+    let statePromise = ValuePromise(initialState, ignoreRepeated: true)
+    let stateValue = Atomic(value: initialState)
+
     let updateState: (() -> Void) = {
         let newState = BiogramControllerState.current()
         _ = stateValue.swap(newState)
         statePromise.set(newState)
     }
-    
+
+    // === Biogram: загружаем настройки именно текущего Telegram-аккаунта ===
+    let accountId = String(context.account.peerId.toInt64())
+    BiogramManager.shared.switchToAccount(accountId: accountId) {
+        updateState()
+    }
+    // =====================================================================
+
     var presentControllerImpl: ((ViewController, Any?) -> Void)?
     
     let arguments = BiogramArguments(
