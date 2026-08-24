@@ -94,7 +94,6 @@ public final class BiogramManager {
 
                 NotificationCenter.default.post(name: .biogramAccountDidLoad, object: self)
                 NotificationCenter.default.post(name: .biogramStateDidChange, object: self)
-
                 completion?()
             }
         }
@@ -143,8 +142,15 @@ public final class BiogramManager {
         return self.cachedBannerImage
     }
 
-    public var bannerHeight: CGFloat {
-        return CGFloat(self.cachedCustomizations.bannerHeight)
+    /// Высота баннера от aspect ratio картинки (ширина контейнера × ratio).
+    /// Clamp 80...300 pt. Если картинки нет — fallback 140.
+    public func bannerHeight(forWidth width: CGFloat) -> CGFloat {
+        guard let image = self.cachedBannerImage, image.size.width > 0 else {
+            return 140.0
+        }
+        let ratio = image.size.height / image.size.width
+        let height = width * ratio
+        return max(80.0, min(300.0, height))
     }
 
     public var profileColorEnabled: Bool {
@@ -280,14 +286,6 @@ public final class BiogramManager {
     }
 
     // MARK: - Banner
-
-    public func setBannerHeight(_ height: CGFloat, completion: (() -> Void)? = nil) {
-        var custom = self.cachedCustomizations
-        custom.bannerHeight = Double(max(60.0, min(400.0, height)))
-        self.cachedCustomizations = custom
-        self.notifyStateChanged()
-        self.storage.setCustomizations(custom, completion: completion)
-    }
 
     public func bannerFileURL() -> URL? {
         guard let name = self.cachedBanner?.localFilename else {
