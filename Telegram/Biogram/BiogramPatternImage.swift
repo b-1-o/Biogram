@@ -1,22 +1,23 @@
 import UIKit
 
 public enum BiogramPatternImage {
-    /// Creates a dense Telegram-style pattern distributed across the
-    /// entire canvas, with a transparent area around the avatar center.
+    /// Dense Telegram-style pattern across the full cover.
+    /// Circular clear zone around the real avatar center (no square).
     public static func make(
         pattern: String,
         color: UIColor,
         opacity: CGFloat,
-        canvasSize: CGSize = CGSize(width: 420.0, height: 420.0)
+        canvasSize: CGSize = CGSize(width: 420.0, height: 420.0),
+        avatarCenter: CGPoint? = nil,
+        avatarSize: CGSize? = nil
     ) -> UIImage? {
         guard pattern != "none",
-              canvasSize.width > 0.0,
-              canvasSize.height > 0.0 else {
+              canvasSize.width > 1.0,
+              canvasSize.height > 1.0 else {
             return nil
         }
 
         let symbol: String
-
         switch pattern {
         case "skulls":
             symbol = "𐕣"
@@ -28,11 +29,7 @@ public enum BiogramPatternImage {
             return nil
         }
 
-        let clampedOpacity = max(
-            0.0,
-            min(1.0, opacity)
-        )
-
+        let clampedOpacity = max(0.0, min(1.0, opacity))
         guard clampedOpacity > 0.0 else {
             return nil
         }
@@ -41,70 +38,47 @@ public enum BiogramPatternImage {
         format.scale = UIScreen.main.scale
         format.opaque = false
 
-        return UIGraphicsImageRenderer(
-            size: canvasSize,
-            format: format
-        ).image { rendererContext in
+        return UIGraphicsImageRenderer(size: canvasSize, format: format).image { rendererContext in
             let context = rendererContext.cgContext
 
-            let minDimension = min(
-                canvasSize.width,
-                canvasSize.height
-            )
+            let minDimension = min(canvasSize.width, canvasSize.height)
 
-            // Pattern scales with the actual cover size.
-            let symbolSize = max(
-                16.0,
-                min(34.0, minDimension * 0.075)
-            )
+            // Dense like real Telegram profile emoji pattern.
+            let symbolSize = max(14.0, min(28.0, minDimension * 0.055))
+            let horizontalSpacing = symbolSize * 1.55
+            let verticalSpacing = symbolSize * 1.40
 
-            let horizontalSpacing = symbolSize * 2.25
-            let verticalSpacing = symbolSize * 1.95
-
-            let font = UIFont.systemFont(
-                ofSize: symbolSize,
-                weight: .regular
-            )
-
+            let font = UIFont.systemFont(ofSize: symbolSize, weight: .regular)
             let attributes: [NSAttributedString.Key: Any] = [
                 .font: font,
-                .foregroundColor: color.withAlphaComponent(
-                    clampedOpacity
-                )
+                .foregroundColor: color.withAlphaComponent(clampedOpacity)
             ]
 
             let text = symbol as NSString
-            let textSize = text.size(
-                withAttributes: attributes
-            )
+            let textSize = text.size(withAttributes: attributes)
 
-            // Keep a clear area around the avatar.
-            // It is intentionally a circle instead of a square, so the
-            // pattern does not create the "square around avatar" effect.
-            let avatarCenter = CGPoint(
+            let resolvedAvatarCenter = avatarCenter ?? CGPoint(
                 x: canvasSize.width * 0.5,
                 y: canvasSize.height * 0.5
             )
 
+            // Clear radius tracks real avatar size when available.
+            let avatarDiameter: CGFloat
+            if let avatarSize {
+                avatarDiameter = max(avatarSize.width, avatarSize.height)
+            } else {
+                avatarDiameter = max(80.0, minDimension * 0.22)
+            }
+
+            // Soft circular hole — never a square.
             let avatarClearRadius = max(
-                58.0,
-                minDimension * 0.17
+                avatarDiameter * 0.72,
+                min(avatarDiameter * 0.95, minDimension * 0.18)
             )
 
-            // Deterministic pseudo-random helper.
-            // This keeps the pattern stable between renders.
-            func variation(
-                x: Int,
-                y: Int
-            ) -> CGFloat {
-                let value =
-                    sin(
-                        Double(x * 127 + y * 311)
-                    ) * 43758.5453
-
-                return CGFloat(
-                    value - floor(value)
-                )
+            func variation(x: Int, y: Int) -> CGFloat {
+                let value = sin(Double(x * 127 + y * 311)) * 43758.5453
+                return CGFloat(value - floor(value))
             }
 
             let startY = -verticalSpacing
@@ -113,88 +87,43 @@ public enum BiogramPatternImage {
             let endX = canvasSize.width + horizontalSpacing
 
             var row = 0
-
             var y = startY
 
             while y <= endY {
-                let rowOffset =
-                    row % 2 == 0
-                    ? 0.0
-                    : horizontalSpacing * 0.5
-
+                let rowOffset = (row % 2 == 0) ? 0.0 : horizontalSpacing * 0.5
                 var column = 0
                 var x = startX + rowOffset
 
                 while x <= endX {
-                    let point = CGPoint(
-                        x: x,
-                        y: y
-                    )
+                    let point = CGPoint(x: x, y: y)
+                    let dx = point.x - resolvedAvatarCenter.x
+                    let dy = point.y - resolvedAvatarCenter.y
+                    let distance = sqrt(dx * dx + dy * dy)
 
-                    let dx = point.x - avatarCenter.x
-                    let dy = point.y - avatarCenter.y
-
-                    let distance = sqrt(
-                        dx * dx +
-                        dy * dy
-                    )
-
-                    // Don't draw inside the avatar protection circle.
                     if distance > avatarClearRadius {
-                        let jitterX =
-                            (variation(x: column, y: row) - 0.5)
-                            * symbolSize
-                            * 0.28
+                        let jitterX = (variation(x: column, y: row) - 0.5) * symbolSize * 0.20
+                        let jitterY = (variation(x: column + 71, y: row + 17) - 0.5) * symbolSize * 0.16
+                        let finalPoint = CGPoint(x: point.x + jitterX, y: point.y + jitterY)
+                        let rotation = (variation(x: column + 19, y: row + 53) - 0.5) * 0.22
+                        let scale = 0.78 + variation(x: column + 37, y: row + 101) * 0.30
 
-                        let jitterY =
-                            (variation(x: column + 71, y: row + 17) - 0.5)
-                            * symbolSize
-                            * 0.22
+                        // Fade near avatar edge for soft transition.
+                        let edgeFade = min(1.0, (distance - avatarClearRadius) / (symbolSize * 1.2))
+                        let drawAlpha = clampedOpacity * max(0.25, edgeFade)
 
-                        let finalPoint = CGPoint(
-                            x: point.x + jitterX,
-                            y: point.y + jitterY
-                        )
-
-                        let rotation =
-                            (variation(
-                                x: column + 19,
-                                y: row + 53
-                            ) - 0.5) * 0.18
+                        let drawAttributes: [NSAttributedString.Key: Any] = [
+                            .font: font,
+                            .foregroundColor: color.withAlphaComponent(drawAlpha)
+                        ]
 
                         context.saveGState()
-
-                        context.translateBy(
-                            x: finalPoint.x,
-                            y: finalPoint.y
-                        )
-
-                        context.rotate(
-                            by: rotation
-                        )
-
-                        // Small deterministic size variation gives it
-                        // the organic Telegram-like feel.
-                        let scale =
-                            0.82 +
-                            variation(
-                                x: column + 37,
-                                y: row + 101
-                            ) * 0.34
-
-                        context.scaleBy(
-                            x: scale,
-                            y: scale
-                        )
-
+                        context.translateBy(x: finalPoint.x, y: finalPoint.y)
+                        context.rotate(by: rotation)
+                        context.scaleBy(x: scale, y: scale)
                         text.draw(
-                            at: CGPoint(
-                                x: -textSize.width * 0.5,
-                                y: -textSize.height * 0.5
-                            ),
-                            withAttributes: attributes
+                            at: CGPoint(x: -textSize.width * 0.5, y: -textSize.height * 0.5),
+                            withAttributes: drawAttributes
                         )
-
                         context.restoreGState()
                     }
 
@@ -208,42 +137,12 @@ public enum BiogramPatternImage {
         }
     }
 
-    public static func uiColor(
-        from profileColor: BiogramProfileColor
-    ) -> UIColor {
-        let brightness = max(
-            0.1,
-            min(1.5, profileColor.brightness)
-        )
-
+    public static func uiColor(from profileColor: BiogramProfileColor) -> UIColor {
+        let brightness = max(0.1, min(1.5, profileColor.brightness))
         return UIColor(
-            red: CGFloat(
-                max(
-                    0.0,
-                    min(
-                        1.0,
-                        profileColor.r * brightness
-                    )
-                )
-            ),
-            green: CGFloat(
-                max(
-                    0.0,
-                    min(
-                        1.0,
-                        profileColor.g * brightness
-                    )
-                )
-            ),
-            blue: CGFloat(
-                max(
-                    0.0,
-                    min(
-                        1.0,
-                        profileColor.b * brightness
-                    )
-                )
-            ),
+            red: CGFloat(max(0.0, min(1.0, profileColor.r * brightness))),
+            green: CGFloat(max(0.0, min(1.0, profileColor.g * brightness))),
+            blue: CGFloat(max(0.0, min(1.0, profileColor.b * brightness))),
             alpha: 1.0
         )
     }
