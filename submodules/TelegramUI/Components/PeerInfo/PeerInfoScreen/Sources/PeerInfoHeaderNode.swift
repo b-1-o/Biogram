@@ -606,14 +606,6 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             backgroundCoverSubject = nil
         }
 
-        // Biogram: custom banner height for own profile
-        if self.isMyProfile {
-            let h = BiogramManager.shared.bannerHeight
-            if h >= 60.0 && h <= 400.0 {
-                backgroundDefaultHeight = h
-            }
-        }
-
         var currentSavedMusic: TelegramMediaFile?
         if let peer, peer.id != self.context.account.peerId || self.isMyProfile, let screenData {
             if let savedMusicState = screenData.savedMusicState {
