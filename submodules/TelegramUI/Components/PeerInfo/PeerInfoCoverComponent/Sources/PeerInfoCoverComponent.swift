@@ -605,6 +605,7 @@ public final class PeerInfoCoverComponent: Component {
             
             var biogramPatternKey = "none"
             var biogramPatternOpacity: CGFloat = 0.25
+            var biogramGlowActive = false
             
             if BiogramManager.shared.profileColorEnabled,
                let pc = BiogramManager.shared.profileColor {
@@ -620,14 +621,15 @@ public final class PeerInfoCoverComponent: Component {
                 
                 biogramPatternKey = pc.pattern
                 biogramPatternOpacity = CGFloat(pc.patternOpacity)
+                biogramGlowActive = true
                 
-                let glowSteps = 8
-                
+                // Более выразительный radial glow вокруг аватарки
+                let glowSteps = 12
                 self.avatarBackgroundGradientLayer.colors = (0 ..< glowSteps).map { index in
-                    let fraction = 1.0 - CGFloat(index) / CGFloat(glowSteps - 1)
-                    return color.withAlphaComponent(
-                        0.55 * fraction * fraction
-                    ).cgColor
+                    let t = CGFloat(index) / CGFloat(max(glowSteps - 1, 1))
+                    // Центр яркий (~0.95), края мягко уходят в 0
+                    let alpha = 0.95 * pow(1.0 - t, 1.25)
+                    return color.withAlphaComponent(min(1.0, max(0.0, alpha))).cgColor
                 }
                 
                 self.avatarBackgroundGradientLayer.startPoint = CGPoint(x: 0.5, y: 0.5)
@@ -646,7 +648,7 @@ public final class PeerInfoCoverComponent: Component {
                 self.backgroundView.backgroundColor = backgroundColor
                 self.backgroundGradientLayer.startPoint = CGPoint(
                     x: 0.5,
-                    y: component.avatarCenter.y / gradientHeight
+                    y: component.avatarCenter.y / max(gradientHeight, 1.0)
                 )
                 self.backgroundGradientLayer.endPoint = CGPoint(x: 1.0, y: 1.0)
                 self.backgroundGradientLayer.type = .radial
@@ -839,7 +841,7 @@ public final class PeerInfoCoverComponent: Component {
                     
                     self.avatarBackgroundPatternContentsLayer.compositingFilter = nil
                     self.avatarBackgroundPatternContentsLayer.colors = [
-                        color.withAlphaComponent(0.42).cgColor,
+                        color.withAlphaComponent(0.55).cgColor,
                         color.withAlphaComponent(0.0).cgColor
                     ]
                 } else if component.subject?.colors(
@@ -871,7 +873,7 @@ public final class PeerInfoCoverComponent: Component {
             
             // MARK: Avatar glow
             
-            if BiogramManager.shared.profileColorEnabled {
+            if biogramGlowActive || BiogramManager.shared.profileColorEnabled {
                 self.avatarBackgroundGradientLayer.isHidden = false
             } else {
                 switch component.subject {
@@ -887,17 +889,27 @@ public final class PeerInfoCoverComponent: Component {
                 }
             }
             
+            // Больший радиус glow — эффект заметнее
+            let glowDiameter: CGFloat = biogramGlowActive ? 420.0 : 300.0
             transition.setFrame(
                 layer: self.avatarBackgroundGradientLayer,
                 frame: CGSize(
-                    width: 300.0,
-                    height: 300.0
+                    width: glowDiameter,
+                    height: glowDiameter
                 ).centered(around: component.avatarCenter)
             )
             
+            // При Biogram glow держим ярче (не гасим так сильно при collapse)
+            let glowAlpha: CGFloat
+            if biogramGlowActive {
+                glowAlpha = max(0.55, 1.0 - component.avatarTransitionFraction * 0.45)
+            } else {
+                glowAlpha = 1.0 - component.avatarTransitionFraction
+            }
+            
             transition.setAlpha(
                 layer: self.avatarBackgroundGradientLayer,
-                alpha: 1.0 - component.avatarTransitionFraction
+                alpha: glowAlpha
             )
             
             // MARK: Telegram animated background pattern
