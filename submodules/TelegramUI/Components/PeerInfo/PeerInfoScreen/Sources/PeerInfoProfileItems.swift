@@ -278,8 +278,7 @@ if isMyProfile {
         items[currentPeerInfoSection]!.append(
             PeerInfoScreenBiogramBannerItem(
                 id: 9498,
-                image: bannerImage,
-                height: BiogramManager.shared.bannerHeight   // ← берём из настроек
+                image: bannerImage
             )
         )
     }
