@@ -9,7 +9,7 @@ public struct BiogramCollectible: Codable, Equatable {
     public var createdAt: Date
     public var giftSlug: String?
     public var stickerFileId: Int64?
-    
+   
     public init(
         id: String = UUID().uuidString,
         title: String? = nil,
@@ -36,7 +36,7 @@ public struct BiogramVirtualNumber: Codable, Equatable {
     public var label: String?
     public var number: String
     public var createdAt: Date
-    
+   
     public init(
         id: String = UUID().uuidString,
         label: String? = nil,
@@ -61,7 +61,7 @@ public struct BiogramProfileColor: Codable, Equatable {
     public var pattern: String
     /// Прозрачность паттерна 0...1
     public var patternOpacity: Double
-    
+   
     public init(
         r: Double,
         g: Double,
@@ -77,7 +77,7 @@ public struct BiogramProfileColor: Codable, Equatable {
         self.pattern = pattern
         self.patternOpacity = patternOpacity
     }
-    
+   
     public static let presets: [(String, BiogramProfileColor)] = [
         ("Blue", BiogramProfileColor(r: 0.25, g: 0.55, b: 0.95)),
         ("Dark Red", BiogramProfileColor(r: 0.55, g: 0.08, b: 0.12)),
@@ -90,7 +90,7 @@ public struct BiogramProfileColor: Codable, Equatable {
         ("Black", BiogramProfileColor(r: 0.08, g: 0.08, b: 0.10)),
         ("White", BiogramProfileColor(r: 0.95, g: 0.95, b: 0.97)),
     ]
-    
+   
     public static let patterns: [(String, String)] = [
         ("None", "none"),
         ("Skulls", "skulls"),
@@ -106,17 +106,14 @@ public struct BiogramCustomizations: Codable, Equatable {
     public var localAliases: [String]
     public var profileColor: BiogramProfileColor?
     public var profileColorEnabled: Bool
-    /// Высота баннера в pt
-    public var bannerHeight: Double
-    
+   
     public init(
         localPremiumEnabled: Bool = false,
         showPremiumBadge: Bool = true,
         badgeStyle: String? = "stars",
         localAliases: [String] = [],
         profileColor: BiogramProfileColor? = nil,
-        profileColorEnabled: Bool = false,
-        bannerHeight: Double = 140.0
+        profileColorEnabled: Bool = false
     ) {
         self.localPremiumEnabled = localPremiumEnabled
         self.showPremiumBadge = showPremiumBadge
@@ -124,7 +121,6 @@ public struct BiogramCustomizations: Codable, Equatable {
         self.localAliases = localAliases
         self.profileColor = profileColor
         self.profileColorEnabled = profileColorEnabled
-        self.bannerHeight = bannerHeight
     }
 }
 
@@ -154,7 +150,7 @@ public struct BiogramBanner: Codable, Equatable {
     /// "3:1", "16:9", "4:3", "1:1", "free"
     public var aspectRatio: String
     public var createdAt: Date
-    
+   
     public init(
         id: String = UUID().uuidString,
         localFilename: String,
