@@ -31,6 +31,7 @@ import PeerInfoScreen
 import PeerInfoStoryGridScreen
 import ShareWithPeersScreen
 import ChatEmptyNode
+import Biogram
 
 private class DetailsChatPlaceholderNode: ASDisplayNode, NavigationDetailsPlaceholderNode {
     private var presentationData: PresentationData
@@ -98,7 +99,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     }
     
     public var minimizedContainerUpdated: (MinimizedContainer?) -> Void = { _ in }
-        
+    
     public init(context: AccountContext) {
         self.context = context
         
@@ -136,6 +137,10 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                 moveStorySource(engine: self.context.engine, peerId: self.context.account.peerId, from: Int64(stableId), to: Int64(id))
             })
         }
+        
+        // Biogram: load local settings for this account on launch / account switch
+        let accountId = String(context.account.peerId.toInt64())
+        BiogramManager.shared.ensureAccountLoaded(accountId: accountId)
     }
     
     required public init(coder aDecoder: NSCoder) {
@@ -195,7 +200,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             self.detailsPlaceholderNode = nil
             self.updateDetailsPlaceholderNode(nil)
         }
-    
+        
         super.containerLayoutUpdated(layout, transition: transition)
     }
     
@@ -211,7 +216,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         var controllers: [ViewController] = []
         
         let contactsController = ContactsController(context: self.context)
-        contactsController.switchToChatsController = {  [weak self] in
+        contactsController.switchToChatsController = { [weak self] in
             self?.openChatsController(activateSearch: false)
         }
         // MARK: Swiftgram
@@ -242,7 +247,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         }
         accountSettingsController.parentController = self
         controllers.append(accountSettingsController)
-                
+        
         tabBarController.setControllers(controllers, selectedIndex: restoreSettignsController != nil ? (controllers.count - 1) : (controllers.count - 2))
         
         self.contactsController = contactsController
@@ -252,7 +257,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         self.rootTabController = tabBarController
         self.pushViewController(tabBarController, animated: false)
     }
-        
+    
     public func updateRootControllers(showContactsTab: Bool, showCallsTab: Bool) {
         guard let rootTabController = self.rootTabController as? TabBarControllerImpl else {
             return
@@ -510,13 +515,13 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                                 guard let self, let peer else {
                                     return
                                 }
-                                 
+                                
                                 if case let .user(user) = peer {
                                     externalState.isPeerArchived = user.storiesHidden ?? false
                                 } else if case let .channel(channel) = peer {
                                     externalState.isPeerArchived = channel.storiesHidden ?? false
                                 }
-                                 
+                                
                                  self.proceedWithStoryUpload(target: target, results: results, existingMedia: nil, forwardInfo: nil, externalState: externalState, commit: commit)
                                 
                                 dismissCameraImpl?()
@@ -597,7 +602,6 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         }
         
         let folders: [Int64] = results.first?.options.folderIds ?? []
-
         if let rootTabController = self.rootTabController {
             if let index = rootTabController.controllers.firstIndex(where: { $0 is ChatListController}) {
                 rootTabController.selectedIndex = index
@@ -666,7 +670,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                     externalState.transitionOut = chatListController?.storyCameraTransitionOut()
                 }
             }
-             
+            
             if let chatListController {
                 let _ = (chatListController.hasPendingStories
                 |> filter { $0 }
@@ -794,7 +798,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         }
         
         self.popToRoot(animated: false)
-    
+        
         if let index = rootTabController.controllers.firstIndex(where: { $0 is ChatListController }) {
             rootTabController.selectedIndex = index
         }
@@ -806,19 +810,19 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         }
         
         self.popToRoot(animated: false)
-    
+        
         if let index = rootTabController.controllers.firstIndex(where: { $0 is ContactsController }) {
             rootTabController.selectedIndex = index
         }
     }
-        
+    
     public func openSettings(edit: Bool) {
         guard let rootTabController = self.rootTabController else {
             return
         }
         
         self.popToRoot(animated: false)
-    
+        
         if let index = rootTabController.controllers.firstIndex(where: { $0 is PeerInfoScreenImpl }) {
             rootTabController.selectedIndex = index
         }
