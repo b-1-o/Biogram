@@ -1,6 +1,12 @@
 import Foundation
 import UIKit
 
+/// Notifications posted on the main queue when Biogram state changes.
+public extension Notification.Name {
+    static let biogramStateDidChange = Notification.Name("BiogramStateDidChange")
+    static let biogramAccountDidLoad = Notification.Name("BiogramAccountDidLoad")
+}
+
 /// Singleton manager that exposes current Biogram state to the app.
 /// All Biogram state is local-only and stored separately for every Telegram account.
 public final class BiogramManager {
@@ -33,6 +39,15 @@ public final class BiogramManager {
 
     // MARK: - Account
 
+    /// True when the given account (or current) has finished loading from disk.
+    public var isLoaded: Bool {
+        return self.loadedAccountId != nil && self.loadedAccountId == self.currentAccountId
+    }
+
+    public var activeAccountId: String {
+        return self.currentAccountId
+    }
+
     /// Switch the local Biogram state to a Telegram account.
     /// The completion is called on the main queue only after JSON and banner image are loaded.
     public func switchToAccount(accountId: String, completion: (() -> Void)? = nil) {
@@ -52,7 +67,7 @@ public final class BiogramManager {
         self.storage.load(for: accountId) { [weak self] payload in
             guard let self else { return }
 
-            // Decode the image off the main thread. This is intentionally not done from the UI path.
+            // Decode the image off the main thread.
             var bannerImage: UIImage?
             if let banner = payload.banner {
                 let url = Self.bannersDirectory().appendingPathComponent(banner.localFilename)
@@ -77,9 +92,29 @@ public final class BiogramManager {
                 self.cachedBannerImage = bannerImage
                 self.loadedAccountId = accountId
 
+                NotificationCenter.default.post(name: .biogramAccountDidLoad, object: self)
+                NotificationCenter.default.post(name: .biogramStateDidChange, object: self)
+
                 completion?()
             }
         }
+    }
+
+    /// Call this as early as possible when AccountContext is ready (app launch / account switch).
+    /// Safe to call repeatedly.
+    public func ensureAccountLoaded(accountId: String, completion: (() -> Void)? = nil) {
+        if Thread.isMainThread {
+            self.switchToAccount(accountId: accountId, completion: completion)
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                self?.switchToAccount(accountId: accountId, completion: completion)
+            }
+        }
+    }
+
+    private func notifyStateChanged() {
+        assert(Thread.isMainThread)
+        NotificationCenter.default.post(name: .biogramStateDidChange, object: self)
     }
 
     // MARK: - Read accessors
@@ -126,12 +161,14 @@ public final class BiogramManager {
         var custom = self.cachedCustomizations
         custom.localPremiumEnabled = enabled
         self.cachedCustomizations = custom
+        self.notifyStateChanged()
         self.storage.setCustomizations(custom, completion: completion)
     }
 
     public func addAlias(_ alias: String, completion: (() -> Void)? = nil) {
         if !self.cachedAliases.contains(alias) {
             self.cachedAliases.append(alias)
+            self.notifyStateChanged()
             self.storage.addAlias(alias, completion: completion)
         } else {
             completion?()
@@ -140,22 +177,26 @@ public final class BiogramManager {
 
     public func removeAlias(_ alias: String, completion: (() -> Void)? = nil) {
         self.cachedAliases.removeAll(where: { $0 == alias })
+        self.notifyStateChanged()
         self.storage.removeAlias(alias, completion: completion)
     }
 
     public func addVirtualNumber(_ number: BiogramVirtualNumber, completion: (() -> Void)? = nil) {
         self.cachedVirtualNumbers.append(number)
+        self.notifyStateChanged()
         self.storage.addVirtualNumber(number, completion: completion)
     }
 
     public func removeVirtualNumber(id: String, completion: (() -> Void)? = nil) {
         self.cachedVirtualNumbers.removeAll(where: { $0.id == id })
+        self.notifyStateChanged()
         self.storage.removeVirtualNumber(id: id, completion: completion)
     }
 
     public func replaceAlias(old: String, new: String, completion: (() -> Void)? = nil) {
         if let index = self.cachedAliases.firstIndex(of: old) {
             self.cachedAliases[index] = new
+            self.notifyStateChanged()
             self.storage.replaceAliases(self.cachedAliases, completion: completion)
         } else {
             completion?()
@@ -166,6 +207,7 @@ public final class BiogramManager {
         if let index = self.cachedVirtualNumbers.firstIndex(where: { $0.id == id }) {
             self.cachedVirtualNumbers[index].number = number
             self.cachedVirtualNumbers[index].label = label
+            self.notifyStateChanged()
             self.storage.replaceVirtualNumbers(self.cachedVirtualNumbers, completion: completion)
         } else {
             completion?()
@@ -177,16 +219,19 @@ public final class BiogramManager {
         custom.profileColor = color
         custom.profileColorEnabled = enabled
         self.cachedCustomizations = custom
+        self.notifyStateChanged()
         self.storage.setCustomizations(custom, completion: completion)
     }
 
     public func addCollectible(_ collectible: BiogramCollectible, completion: (() -> Void)? = nil) {
         self.cachedCollectibles.append(collectible)
+        self.notifyStateChanged()
         self.storage.addCollectible(collectible, completion: completion)
     }
 
     public func removeCollectible(id: String, completion: (() -> Void)? = nil) {
         self.cachedCollectibles.removeAll(where: { $0.id == id })
+        self.notifyStateChanged()
         self.storage.removeCollectible(id: id, completion: completion)
     }
 
@@ -224,11 +269,13 @@ public final class BiogramManager {
 
         let item = self.cachedCollectibles.remove(at: fromIndex)
         self.cachedCollectibles.insert(item, at: toIndex)
+        self.notifyStateChanged()
         self.storage.replaceCollectibles(self.cachedCollectibles, completion: completion)
     }
 
     public func replaceCollectibles(_ items: [BiogramCollectible], completion: (() -> Void)? = nil) {
         self.cachedCollectibles = items
+        self.notifyStateChanged()
         self.storage.replaceCollectibles(items, completion: completion)
     }
 
@@ -238,6 +285,7 @@ public final class BiogramManager {
         var custom = self.cachedCustomizations
         custom.bannerHeight = Double(max(60.0, min(400.0, height)))
         self.cachedCustomizations = custom
+        self.notifyStateChanged()
         self.storage.setCustomizations(custom, completion: completion)
     }
 
@@ -254,6 +302,7 @@ public final class BiogramManager {
         if banner == nil {
             self.cachedBannerImage = nil
         }
+        self.notifyStateChanged()
 
         self.storage.setBanner(banner) { [weak self] in
             guard let self else {
@@ -274,6 +323,7 @@ public final class BiogramManager {
         let oldName = self.cachedBanner?.localFilename
         self.cachedBanner = nil
         self.cachedBannerImage = nil
+        self.notifyStateChanged()
 
         self.storage.setBanner(nil) { [weak self] in
             guard let self else {
@@ -291,7 +341,6 @@ public final class BiogramManager {
     }
 
     /// Saves a banner without blocking the UI thread.
-    /// The image is scaled down to a sensible maximum size before JPEG encoding.
     @discardableResult
     public func saveBannerImage(
         _ image: UIImage,
@@ -311,6 +360,7 @@ public final class BiogramManager {
 
         self.cachedBanner = banner
         self.cachedBannerImage = image
+        self.notifyStateChanged()
 
         self.bannerIOQueue.async { [weak self] in
             guard let self else { return }
