@@ -636,6 +636,7 @@ public final class PeerInfoCoverComponent: Component {
                 } else {
                     colorKey = "none"
                 }
+
                 return [
                     biogramEnabled ? "1" : "0",
                     isOwnBiogramProfile ? "own" : "other",
