@@ -601,12 +601,7 @@ public final class PeerInfoCoverComponent: Component {
 
             // MARK: Biogram state — ONLY on own profile
 
-            let isOwnBiogramProfile: Bool = {
-                guard case let .peer(peer) = component.subject else {
-                    return false
-                }
-                return peer.id == component.context.account.peerId
-            }()
+            let isOwnBiogramProfile = component.isOwnProfile
 
             let biogramEnabled =
                 isOwnBiogramProfile &&
