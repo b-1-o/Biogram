@@ -157,6 +157,7 @@ public final class PeerInfoCoverComponent: Component {
     public let avatarTransitionFraction: CGFloat
     public let patternTransitionFraction: CGFloat
     public let patternIconScale: CGFloat
+    public let isOwnProfile: Bool
 
     public init(
         context: AccountContext,
@@ -186,6 +187,7 @@ public final class PeerInfoCoverComponent: Component {
         self.avatarTransitionFraction = avatarTransitionFraction
         self.patternTransitionFraction = patternTransitionFraction
         self.patternIconScale = patternIconScale
+        self.isOwnProfile = isOwnProfile
     }
 
     public static func == (lhs: PeerInfoCoverComponent, rhs: PeerInfoCoverComponent) -> Bool {
