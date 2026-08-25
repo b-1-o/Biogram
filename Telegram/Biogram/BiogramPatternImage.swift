@@ -2,7 +2,7 @@ import UIKit
 
 public enum BiogramPatternImage {
     /// Dense Telegram-style pattern across the full cover.
-    /// Circular clear zone around the real avatar center (no square).
+    /// No clear zone — symbols fill the entire area.
     public static func make(
         pattern: String,
         color: UIColor,
@@ -54,29 +54,11 @@ public enum BiogramPatternImage {
             let verticalSpacing = symbolSize * 1.40
 
             let font = UIFont.systemFont(ofSize: symbolSize, weight: .regular)
-
             let text = symbol as NSString
             let textSize = text.size(withAttributes: [
                 .font: font,
                 .foregroundColor: color.withAlphaComponent(clampedOpacity)
             ])
-
-            let resolvedAvatarCenter = avatarCenter ?? CGPoint(
-                x: canvasSize.width * 0.5,
-                y: canvasSize.height * 0.5
-            )
-
-            let avatarDiameter: CGFloat
-            if let avatarSize {
-                avatarDiameter = max(avatarSize.width, avatarSize.height)
-            } else {
-                avatarDiameter = max(80.0, minDimension * 0.22)
-            }
-
-            let avatarClearRadius = max(
-                avatarDiameter * 0.72,
-                min(avatarDiameter * 0.95, minDimension * 0.18)
-            )
 
             func variation(x: Int, y: Int) -> CGFloat {
                 let value = sin(Double(x * 127 + y * 311)) * 43758.5453
@@ -97,36 +79,26 @@ public enum BiogramPatternImage {
                 var x = startX + rowOffset
 
                 while x <= endX {
-                    let point = CGPoint(x: x, y: y)
-                    let dx = point.x - resolvedAvatarCenter.x
-                    let dy = point.y - resolvedAvatarCenter.y
-                    let distance = sqrt(dx * dx + dy * dy)
+                    let jitterX = (variation(x: column, y: row) - 0.5) * symbolSize * 0.20
+                    let jitterY = (variation(x: column + 71, y: row + 17) - 0.5) * symbolSize * 0.16
+                    let finalPoint = CGPoint(x: x + jitterX, y: y + jitterY)
+                    let rotation = (variation(x: column + 19, y: row + 53) - 0.5) * 0.22
+                    let scale = 0.78 + variation(x: column + 37, y: row + 101) * 0.30
 
-                    if distance > avatarClearRadius {
-                        let jitterX = (variation(x: column, y: row) - 0.5) * symbolSize * 0.20
-                        let jitterY = (variation(x: column + 71, y: row + 17) - 0.5) * symbolSize * 0.16
-                        let finalPoint = CGPoint(x: point.x + jitterX, y: point.y + jitterY)
-                        let rotation = (variation(x: column + 19, y: row + 53) - 0.5) * 0.22
-                        let scale = 0.78 + variation(x: column + 37, y: row + 101) * 0.30
+                    let drawAttributes: [NSAttributedString.Key: Any] = [
+                        .font: font,
+                        .foregroundColor: color.withAlphaComponent(clampedOpacity)
+                    ]
 
-                        let edgeFade = min(1.0, (distance - avatarClearRadius) / (symbolSize * 1.2))
-                        let drawAlpha = clampedOpacity * max(0.25, edgeFade)
-
-                        let drawAttributes: [NSAttributedString.Key: Any] = [
-                            .font: font,
-                            .foregroundColor: color.withAlphaComponent(drawAlpha)
-                        ]
-
-                        context.saveGState()
-                        context.translateBy(x: finalPoint.x, y: finalPoint.y)
-                        context.rotate(by: rotation)
-                        context.scaleBy(x: scale, y: scale)
-                        text.draw(
-                            at: CGPoint(x: -textSize.width * 0.5, y: -textSize.height * 0.5),
-                            withAttributes: drawAttributes
-                        )
-                        context.restoreGState()
-                    }
+                    context.saveGState()
+                    context.translateBy(x: finalPoint.x, y: finalPoint.y)
+                    context.rotate(by: rotation)
+                    context.scaleBy(x: scale, y: scale)
+                    text.draw(
+                        at: CGPoint(x: -textSize.width * 0.5, y: -textSize.height * 0.5),
+                        withAttributes: drawAttributes
+                    )
+                    context.restoreGState()
 
                     column += 1
                     x += horizontalSpacing
