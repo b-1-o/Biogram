@@ -2562,7 +2562,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 defaultHeight: backgroundDefaultHeight,
                 gradientCenter: CGPoint(x: 0.5, y: buttonKeys.isEmpty ? 0.5 : 0.45),
                 avatarTransitionFraction: max(0.0, min(1.0, titleCollapseFraction + transitionFraction * 2.0)),
-                patternTransitionFraction: buttonsTransitionFraction * backgroundTransitionFraction
+                patternTransitionFraction: buttonsTransitionFraction * backgroundTransitionFraction,
                 isOwnProfile: self.isMyProfile
             )),
             environment: {},
