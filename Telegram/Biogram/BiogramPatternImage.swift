@@ -25,6 +25,12 @@ public enum BiogramPatternImage {
             symbol = "⛧"
         case "stars":
             symbol = "✦"
+        case "crosses":
+            symbol = "✠"
+        case "snowflakes":
+            symbol = "❆"
+        case "frost":
+            symbol = "❅"
         default:
             return nil
         }
