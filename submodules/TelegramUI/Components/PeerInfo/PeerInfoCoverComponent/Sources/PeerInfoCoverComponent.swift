@@ -172,7 +172,8 @@ public final class PeerInfoCoverComponent: Component {
         gradientCenter: CGPoint = CGPoint(x: 0.5, y: 0.5),
         avatarTransitionFraction: CGFloat,
         patternTransitionFraction: CGFloat,
-        patternIconScale: CGFloat = 1.0
+        patternIconScale: CGFloat = 1.0,
+        isOwnProfile: Bool = false
     ) {
         self.context = context
         self.subject = subject
@@ -204,6 +205,7 @@ public final class PeerInfoCoverComponent: Component {
         if lhs.avatarTransitionFraction != rhs.avatarTransitionFraction { return false }
         if lhs.patternTransitionFraction != rhs.patternTransitionFraction { return false }
         if lhs.patternIconScale != rhs.patternIconScale { return false }
+        if lhs.isOwnProfile != rhs.isOwnProfile { return false }
         return true
     }
 
