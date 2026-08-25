@@ -49,26 +49,23 @@ public enum BiogramPatternImage {
 
             let minDimension = min(canvasSize.width, canvasSize.height)
 
-            // Dense like real Telegram profile emoji pattern.
             let symbolSize = max(14.0, min(28.0, minDimension * 0.055))
             let horizontalSpacing = symbolSize * 1.55
             let verticalSpacing = symbolSize * 1.40
 
             let font = UIFont.systemFont(ofSize: symbolSize, weight: .regular)
-            let attributes: [NSAttributedString.Key: Any] = [
-                .font: font,
-                .foregroundColor: color.withAlphaComponent(clampedOpacity)
-            ]
 
             let text = symbol as NSString
-            let textSize = text.size(withAttributes: attributes)
+            let textSize = text.size(withAttributes: [
+                .font: font,
+                .foregroundColor: color.withAlphaComponent(clampedOpacity)
+            ])
 
             let resolvedAvatarCenter = avatarCenter ?? CGPoint(
                 x: canvasSize.width * 0.5,
                 y: canvasSize.height * 0.5
             )
 
-            // Clear radius tracks real avatar size when available.
             let avatarDiameter: CGFloat
             if let avatarSize {
                 avatarDiameter = max(avatarSize.width, avatarSize.height)
@@ -76,7 +73,6 @@ public enum BiogramPatternImage {
                 avatarDiameter = max(80.0, minDimension * 0.22)
             }
 
-            // Soft circular hole — never a square.
             let avatarClearRadius = max(
                 avatarDiameter * 0.72,
                 min(avatarDiameter * 0.95, minDimension * 0.18)
@@ -113,7 +109,6 @@ public enum BiogramPatternImage {
                         let rotation = (variation(x: column + 19, y: row + 53) - 0.5) * 0.22
                         let scale = 0.78 + variation(x: column + 37, y: row + 101) * 0.30
 
-                        // Fade near avatar edge for soft transition.
                         let edgeFade = min(1.0, (distance - avatarClearRadius) / (symbolSize * 1.2))
                         let drawAlpha = clampedOpacity * max(0.25, edgeFade)
 
