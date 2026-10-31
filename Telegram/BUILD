@@ -1969,8 +1969,8 @@ ios_application(
     ],
     resources = [
         ":LaunchScreen",
-        // Make the same Biogram mark used by the app icon available to the
-        // authorization intro screen as a normal image resource.
+        # Make the same Biogram mark used by the app icon available to the
+        # authorization intro screen as a normal image resource.
         "Telegram-iOS/Swiftgram.icon/Assets/Biogram.png",
         #":DefaultAppIcon",
     ],
