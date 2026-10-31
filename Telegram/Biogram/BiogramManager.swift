@@ -22,6 +22,8 @@ public final class BiogramManager {
     private var currentAccountId: String = "default"
     private var switchGeneration: UInt64 = 0
     private var loadedAccountId: String?
+    // Prevent cloud-downloaded profile changes from triggering an upload back to Cloudflare.
+    private var isApplyingCloudProfile: Bool = false
 
     private var cachedCustomizations: BiogramCustomizations
     private var cachedAliases: [String]
