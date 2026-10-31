@@ -496,6 +496,23 @@ private func syncTelegramProfileColor(_ color: BiogramProfileColor?, context: Ac
 private func biogramControllerEntries(state: BiogramControllerState) -> [BiogramEntry] {
     var entries: [BiogramEntry] = []
 
+    // Keep the original Biogram tools visible. Their storage and editing actions
+    // remain account-scoped; removing these rows must not remove the features.
+    entries.append(.premiumHeader)
+    entries.append(.premiumToggle(state.premiumEnabled))
+
+    entries.append(.numbersHeader)
+    for (index, number) in state.numbers.enumerated() {
+        entries.append(.number(index, number))
+    }
+    entries.append(.addNumber)
+
+    entries.append(.aliasesHeader)
+    for (index, alias) in state.aliases.enumerated() {
+        entries.append(.alias(index, alias))
+    }
+    entries.append(.addAlias)
+
     entries.append(.colorHeader)
     entries.append(.colorToggle(state.profileColorEnabled))
     if state.profileColorEnabled {
@@ -516,6 +533,12 @@ private func biogramControllerEntries(state: BiogramControllerState) -> [Biogram
             entries.append(.colorPatternOpacity(current?.patternOpacity ?? 0.25))
         }
     }
+
+    entries.append(.collectiblesHeader)
+    for (index, collectible) in state.collectibles.enumerated() {
+        entries.append(.collectible(index, collectible))
+    }
+    entries.append(.addGiftFromLink)
 
     entries.append(.bannerHeader)
     entries.append(.bannerPreview(state.hasBanner))
@@ -1092,7 +1115,9 @@ private final class Biogram3DProfileCardView: UIView {
         image: UIImage?,
         displayName: String,
         username: String,
-        userId: String
+        userId: String,
+        aliases: [String] = [],
+        publicNumbers: [BiogramCloudPublicNumber] = []
     ) {
         self.style = style
         self.userName = displayName.isEmpty ? "BIOGRAM MEMBER" : displayName.uppercased()
@@ -1108,9 +1133,36 @@ private final class Biogram3DProfileCardView: UIView {
         self.handleLabel.text = self.userHandle.hasPrefix("@") ? self.userHandle : "@\(self.userHandle)"
         let signature = biogramCardSignature(userId)
         self.frontSignatureLabel.text = signature
-        self.backHandleLabel.text = self.handleLabel.text
-        self.backIdLabel.text = "MEMBER SERIAL  /  \(String(signature.suffix(14)))"
-        self.backCipherLabel.text = "B1O://\(String(signature.prefix(7)).replacingOccurrences(of: " ", with: ""))//PROFILE//\(String(signature.suffix(8)))"
+
+        let normalizedHandle = self.userHandle.replacingOccurrences(of: "@", with: "")
+        let additionalAliases = aliases.filter {
+            $0.replacingOccurrences(of: "@", with: "") != normalizedHandle
+        }
+        let visibleAliases = additionalAliases.prefix(2).map {
+            $0.hasPrefix("@") ? $0 : "@\($0)"
+        }
+        let remainingAliasCount = max(0, additionalAliases.count - visibleAliases.count)
+        let aliasSuffix = remainingAliasCount > 0 ? "  +\(remainingAliasCount)" : ""
+        self.backTitleLabel.text = "BIOGRAM / PROFILE DETAILS"
+        self.backHandleLabel.text = visibleAliases.isEmpty
+            ? (self.handleLabel.text ?? self.userHandle)
+            : "ALIASES  " + visibleAliases.joined(separator: "  · ") + aliasSuffix
+        self.backIdLabel.text = "TELEGRAM ID  /  \(userId)"
+
+        let visibleNumbers = publicNumbers.filter { $0.isPublic }.prefix(2)
+        let numberSummary = visibleNumbers.map { number -> String in
+            let label = number.label?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let label, !label.isEmpty {
+                return "\(label) · \(number.number)"
+            }
+            return number.number
+        }
+        let remainingNumberCount = max(0, publicNumbers.filter { $0.isPublic }.count - numberSummary.count)
+        let numberSuffix = remainingNumberCount > 0 ? "  +\(remainingNumberCount)" : ""
+        self.backCipherLabel.numberOfLines = 2
+        self.backCipherLabel.text = numberSummary.isEmpty
+            ? "NO PUBLIC ANONYMOUS NUMBERS"
+            : "PUBLIC NUMBERS  /  " + numberSummary.joined(separator: "  ·  ") + numberSuffix
         self.backSignatureLabel.text = signature
         self.backGradient.colors = [shade.cgColor, biogramCardColor("#111114").cgColor, main.withAlphaComponent(0.40).cgColor]
 
@@ -1407,7 +1459,9 @@ private final class BiogramProfileCardDesignerController: ViewController {
             image: BiogramManager.shared.profileCardImage(),
             displayName: self.displayName,
             username: self.username,
-            userId: self.userId
+            userId: self.userId,
+            aliases: BiogramManager.shared.aliases(),
+            publicNumbers: BiogramManager.shared.cloudProfilePayload().publicNumbers
         )
         self.view.setNeedsLayout()
     }
@@ -1531,7 +1585,9 @@ private final class BiogramProfileCardViewerController: ViewController {
             image: self.profile.cardImage,
             displayName: self.profile.displayName,
             username: self.profile.username.map { "@\($0)" } ?? "@biogram",
-            userId: self.profile.telegramId
+            userId: self.profile.telegramId,
+            aliases: self.profile.aliases,
+            publicNumbers: self.profile.publicNumbers
         )
     }
 
