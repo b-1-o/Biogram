@@ -277,6 +277,9 @@ typedef enum {
 #if TARGET_OS_SIMULATOR && defined(__aarch64__)
     // The Biogram mark is a static image, so the intro does not need OpenGL on this target.
     NSString *logoPath = [[NSBundle mainBundle] pathForResource:@"Biogram" ofType:@"png"];
+        if (logoPath == nil) {
+            logoPath = [[NSBundle mainBundle] pathForResource:@"Biogram" ofType:@"png" inDirectory:@"Swiftgram.icon/Assets"];
+        }
     UIImage *logoImage = logoPath != nil ? [UIImage imageWithContentsOfFile:logoPath] : nil;
     if (logoImage != nil && !_isOpenGLLoaded) {
         CGFloat size = 200.0;
@@ -309,6 +312,9 @@ typedef enum {
             height += 138 / 2;
 
         NSString *logoPath = [[NSBundle mainBundle] pathForResource:@"Biogram" ofType:@"png"];
+        if (logoPath == nil) {
+            logoPath = [[NSBundle mainBundle] pathForResource:@"Biogram" ofType:@"png" inDirectory:@"Swiftgram.icon/Assets"];
+        }
         UIImage *logoImage = logoPath != nil ? [UIImage imageWithContentsOfFile:logoPath] : nil;
         if (logoImage != nil) {
             _biogramLogoView = [[UIImageView alloc] initWithImage:logoImage];
@@ -423,6 +429,12 @@ typedef enum {
     _pageControl.pageIndicatorTintColor = _regularDotColor;
     _pageControl.currentPageIndicatorTintColor = _highlightedDotColor;
     [_wrapperView addSubview:_pageControl];
+
+    // The logo is created before the intro scroll view; keep it above that
+    // transparent layer so the Biogram mark remains visible on the welcome screen.
+    if (_biogramLogoView != nil) {
+        [self.view bringSubviewToFront:_biogramLogoView];
+    }
 }
 
 - (UIView *)createAnimationSnapshot {
