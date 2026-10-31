@@ -394,12 +394,15 @@ typedef enum {
     [self loadGL];
     
     _wrapperView = [[UIScrollView alloc]initWithFrame:self.view.bounds];
+    _wrapperView.backgroundColor = UIColor.clearColor;
+    _wrapperView.opaque = false;
     [self.view addSubview:_wrapperView];
     
     _pageScrollView = [[UIScrollView alloc]initWithFrame:self.view.bounds];
+    _pageScrollView.backgroundColor = UIColor.clearColor;
     _pageScrollView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
     _pageScrollView.clipsToBounds = true;
-    _pageScrollView.opaque = true;
+    _pageScrollView.opaque = false;
     _pageScrollView.clearsContextBeforeDrawing = false;
     [_pageScrollView setShowsHorizontalScrollIndicator:false];
     [_pageScrollView setShowsVerticalScrollIndicator:false];
@@ -413,7 +416,8 @@ typedef enum {
     for (NSUInteger i = 0; i < _headlines.count; i++)
     {
         RMIntroPageView *p = [[RMIntroPageView alloc]initWithFrame:CGRectMake(i * self.view.bounds.size.width, 0, self.view.bounds.size.width, 0) headline:[_headlines objectAtIndex:i] description:[_descriptions objectAtIndex:i] color:_primaryColor];
-        p.opaque = true;
+        p.backgroundColor = UIColor.clearColor;
+        p.opaque = false;
         p.clearsContextBeforeDrawing = false;
         [_pageViews addObject:p];
         [_pageScrollView addSubview:p];
@@ -430,11 +434,6 @@ typedef enum {
     _pageControl.currentPageIndicatorTintColor = _highlightedDotColor;
     [_wrapperView addSubview:_pageControl];
 
-    // The logo is created before the intro scroll view; keep it above that
-    // transparent layer so the Biogram mark remains visible on the welcome screen.
-    if (_biogramLogoView != nil) {
-        [self.view bringSubviewToFront:_biogramLogoView];
-    }
 }
 
 - (UIView *)createAnimationSnapshot {
