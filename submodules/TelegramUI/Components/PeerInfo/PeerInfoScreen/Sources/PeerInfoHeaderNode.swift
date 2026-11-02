@@ -98,9 +98,16 @@ private final class BiogramProfilePatternOverlayView: UIView {
     required init?(coder: NSCoder) { fatalError() }
 
     func update(pattern: String, opacity: Double) {
+        let normalizedOpacity = CGFloat(max(0.0, min(1.0, opacity)))
+        let shouldHide = pattern == "none" || normalizedOpacity <= 0.01
+        guard self.pattern != pattern
+            || abs(self.opacity - normalizedOpacity) > 0.001
+            || self.isHidden != shouldHide else {
+            return
+        }
         self.pattern = pattern
-        self.opacity = CGFloat(max(0.0, min(1.0, opacity)))
-        self.isHidden = pattern == "none" || self.opacity <= 0.01
+        self.opacity = normalizedOpacity
+        self.isHidden = shouldHide
         self.setNeedsDisplay()
     }
 
@@ -134,6 +141,9 @@ private final class BiogramProfilePatternOverlayView: UIView {
         let rows = Int(ceil(self.bounds.height / cellHeight)) + 1
         let columns = Int(ceil(self.bounds.width / cellWidth)) + 1
 
+        guard let context = UIGraphicsGetCurrentContext() else {
+            return
+        }
         for row in 0..<rows {
             for column in 0..<columns {
                 let symbol = symbols[(row * 3 + column * 5) % symbols.count]
@@ -142,7 +152,6 @@ private final class BiogramProfilePatternOverlayView: UIView {
                     x: CGFloat(column) * cellWidth + (row.isMultiple(of: 2) ? 0.0 : cellWidth * 0.45) + cellWidth * 0.5,
                     y: CGFloat(row) * cellHeight + cellHeight * 0.5
                 )
-                guard let context = UIGraphicsGetCurrentContext() else { continue }
                 context.saveGState()
                 context.translateBy(x: center.x, y: center.y)
                 context.rotate(by: CGFloat((row + column) % 3 - 1) * 0.08)
