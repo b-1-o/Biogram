@@ -83,6 +83,79 @@ protocol PeerInfoHeaderTextFieldNode: ASDisplayNode {
 private let TitleNodeStateRegular = 0
 private let TitleNodeStateExpanded = 1
 
+private final class BiogramProfilePatternOverlayView: UIView {
+    private var pattern = "none"
+    private var opacity: CGFloat = 0.0
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        self.backgroundColor = .clear
+        self.isOpaque = false
+        self.isUserInteractionEnabled = false
+        self.clipsToBounds = true
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    func update(pattern: String, opacity: Double) {
+        self.pattern = pattern
+        self.opacity = CGFloat(max(0.0, min(1.0, opacity)))
+        self.isHidden = pattern == "none" || self.opacity <= 0.01
+        self.setNeedsDisplay()
+    }
+
+    override func draw(_ rect: CGRect) {
+        let symbols: [String]
+        switch self.pattern {
+        case "skulls":
+            symbols = ["☠", "☠", "·"]
+        case "pentagrams":
+            symbols = ["⛤", "✶", "⛤"]
+        case "stars":
+            symbols = ["✦", "✧", "★", "✦"]
+        case "crosses":
+            symbols = ["✛", "✚", "†"]
+        case "snowflakes":
+            symbols = ["❄", "❅", "❆"]
+        case "frost":
+            symbols = ["❆", "✧", "❅", "❄"]
+        default:
+            return
+        }
+
+        let fontSize = max(20.0, min(42.0, self.bounds.width * 0.075))
+        let font = UIFont.systemFont(ofSize: fontSize, weight: .semibold)
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: UIColor.white.withAlphaComponent(self.opacity)
+        ]
+        let cellWidth: CGFloat = max(62.0, fontSize * 2.1)
+        let cellHeight: CGFloat = max(58.0, fontSize * 1.9)
+        let rows = Int(ceil(self.bounds.height / cellHeight)) + 1
+        let columns = Int(ceil(self.bounds.width / cellWidth)) + 1
+
+        for row in 0..<rows {
+            for column in 0..<columns {
+                let symbol = symbols[(row * 3 + column * 5) % symbols.count]
+                let size = (symbol as NSString).size(withAttributes: attributes)
+                let center = CGPoint(
+                    x: CGFloat(column) * cellWidth + (row.isMultiple(of: 2) ? 0.0 : cellWidth * 0.45) + cellWidth * 0.5,
+                    y: CGFloat(row) * cellHeight + cellHeight * 0.5
+                )
+                guard let context = UIGraphicsGetCurrentContext() else { continue }
+                context.saveGState()
+                context.translateBy(x: center.x, y: center.y)
+                context.rotate(by: CGFloat((row + column) % 3 - 1) * 0.08)
+                (symbol as NSString).draw(
+                    at: CGPoint(x: -size.width * 0.5, y: -size.height * 0.5),
+                    withAttributes: attributes
+                )
+                context.restoreGState()
+            }
+        }
+    }
+}
+
 final class PeerInfoHeaderNode: ASDisplayNode {
     private var context: AccountContext
     private let isPremiumDisabled: Bool
@@ -111,6 +184,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     let avatarListNode: PeerInfoAvatarListNode
     
     let backgroundBannerView: UIView
+    private let biogramPatternOverlay = BiogramProfilePatternOverlayView()
     let backgroundCover = ComponentView<Empty>()
     let giftsCover = ComponentView<Empty>()
     var didSetupBackgroundCover = false
@@ -564,6 +638,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         var backgroundCoverAnimateIn = false
         var backgroundDefaultHeight: CGFloat = 254.0
         var hasBackground = false
+        var biogramPatternColor: BiogramProfileColor?
         if let status = peer?.emojiStatus, case .starGift = status.content {
             backgroundCoverSubject = .status(status)
             if !self.didSetupBackgroundCover {
@@ -597,7 +672,8 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     alpha: 1.0
                 )
                 let secondaryColor = mainColor.withMultiplied(hue: 1.0, saturation: 1.15, brightness: 0.75)
-                
+                biogramPatternColor = bc
+
                 backgroundCoverSubject = .custom(mainColor, secondaryColor, nil, nil)
                 hasBackground = true
             } else if let remoteBiogramProfile,
@@ -611,6 +687,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     alpha: 1.0
                 )
                 let secondaryColor = mainColor.withMultiplied(hue: 1.0, saturation: 1.15, brightness: 0.75)
+                biogramPatternColor = bc
                 backgroundCoverSubject = .custom(mainColor, secondaryColor, nil, nil)
                 hasBackground = true
             } else {
@@ -2612,6 +2689,17 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             } else {
                 transition.updateFrame(view: backgroundCoverView, frame: CGRect(origin: CGPoint(x: -bannerInset, y: bannerFrame.height - backgroundCoverSize.height), size: backgroundCoverSize))
             }
+
+            self.biogramPatternOverlay.update(
+                pattern: biogramPatternColor?.pattern ?? "none",
+                opacity: biogramPatternColor?.patternOpacity ?? 0.0
+            )
+            if self.biogramPatternOverlay.superview == nil {
+                self.backgroundBannerView.addSubview(self.biogramPatternOverlay)
+            }
+            self.biogramPatternOverlay.frame = backgroundCoverView.frame
+            self.backgroundBannerView.bringSubviewToFront(self.biogramPatternOverlay)
+
             if backgroundCoverAnimateIn {
                 if !self.isAvatarExpanded {
                     backgroundCoverView.willAnimateIn()
