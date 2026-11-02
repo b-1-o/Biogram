@@ -1713,6 +1713,9 @@ private final class BiogramProfileCardDesignerController: ViewController {
 private final class BiogramProfileCardViewerController: ViewController {
     private let profile: BiogramCloudPublicProfile
     private let cardView = Biogram3DProfileCardView()
+    private let dimView = UIView()
+    private let backgroundBlur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
+    private let stack = UIStackView()
 
     init(profile: BiogramCloudPublicProfile) {
         self.profile = profile
@@ -1729,65 +1732,55 @@ private final class BiogramProfileCardViewerController: ViewController {
         root.backgroundColor = .clear
         root.isOpaque = false
 
-        let dimView = UIView()
-        dimView.backgroundColor = UIColor.black.withAlphaComponent(0.62)
-        dimView.translatesAutoresizingMaskIntoConstraints = false
-        root.addSubview(dimView)
+        self.dimView.backgroundColor = UIColor.black.withAlphaComponent(0.62)
+        self.dimView.alpha = 0.0
+        self.dimView.translatesAutoresizingMaskIntoConstraints = false
+        self.dimView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(closeViewer)))
+        root.addSubview(self.dimView)
 
-        let backgroundBlur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
-        backgroundBlur.alpha = 0.62
-        backgroundBlur.isUserInteractionEnabled = false
-        backgroundBlur.translatesAutoresizingMaskIntoConstraints = false
-        root.addSubview(backgroundBlur)
+        self.backgroundBlur.alpha = 0.0
+        self.backgroundBlur.isUserInteractionEnabled = false
+        self.backgroundBlur.translatesAutoresizingMaskIntoConstraints = false
+        root.addSubview(self.backgroundBlur)
 
-        let stack = UIStackView()
-        stack.axis = .vertical
-        stack.alignment = .fill
-        stack.spacing = 18
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        root.addSubview(stack)
+        self.stack.axis = .vertical
+        self.stack.alignment = .fill
+        self.stack.spacing = 18
+        self.stack.alpha = 0.0
+        self.stack.translatesAutoresizingMaskIntoConstraints = false
+        root.addSubview(self.stack)
 
         let top = UIStackView()
         top.axis = .horizontal
         top.alignment = .center
         top.distribution = .equalSpacing
 
-        let closeButton = UIButton(type: .system)
-        closeButton.setTitle("‹  Biogram", for: .normal)
-        closeButton.titleLabel?.font = UIFont.systemFont(ofSize: 15, weight: .semibold)
-        closeButton.setTitleColor(UIColor.white.withAlphaComponent(0.88), for: .normal)
-        closeButton.contentEdgeInsets = UIEdgeInsets(top: 10, left: 12, bottom: 10, right: 12)
-        closeButton.backgroundColor = UIColor.white.withAlphaComponent(0.075)
-        closeButton.layer.cornerRadius = 13
-        closeButton.layer.borderWidth = 1
-        closeButton.layer.borderColor = UIColor.white.withAlphaComponent(0.12).cgColor
-        closeButton.addTarget(self, action: #selector(closeViewer), for: .touchUpInside)
-
         let title = UILabel()
         title.text = "BIOGRAM CARD"
         title.font = UIFont.monospacedSystemFont(ofSize: 10, weight: .bold)
         title.textColor = biogramCardColor("#E6D7C5")
 
-        top.addArrangedSubview(closeButton)
         top.addArrangedSubview(title)
-        stack.addArrangedSubview(top)
+        self.stack.addArrangedSubview(top)
 
         let heading = UILabel()
         heading.text = "Your Biogram card"
         heading.font = UIFont.systemFont(ofSize: 25, weight: .semibold)
         heading.textColor = .white
         heading.numberOfLines = 2
-        stack.addArrangedSubview(heading)
+        self.stack.addArrangedSubview(heading)
 
         let subtitle = UILabel()
         subtitle.text = "A custom two-sided identity card. Tap to reveal its profile details and visual hash."
         subtitle.font = UIFont.systemFont(ofSize: 13, weight: .regular)
         subtitle.textColor = UIColor.white.withAlphaComponent(0.58)
         subtitle.numberOfLines = 0
-        stack.addArrangedSubview(subtitle)
+        self.stack.addArrangedSubview(subtitle)
 
         self.cardView.translatesAutoresizingMaskIntoConstraints = false
-        stack.addArrangedSubview(self.cardView)
+        self.stack.addArrangedSubview(self.cardView)
+        self.cardView.alpha = 0.0
+        self.cardView.transform = CGAffineTransform(scaleX: 0.68, y: 0.68).translatedBy(x: 0, y: 28)
         self.cardView.heightAnchor.constraint(equalTo: self.cardView.widthAnchor, multiplier: 0.63).isActive = true
 
         let hint = UILabel()
@@ -1796,22 +1789,22 @@ private final class BiogramProfileCardViewerController: ViewController {
         hint.textColor = UIColor.white.withAlphaComponent(0.42)
         hint.numberOfLines = 0
         hint.textAlignment = .center
-        stack.addArrangedSubview(hint)
+        self.stack.addArrangedSubview(hint)
 
         NSLayoutConstraint.activate([
-            dimView.topAnchor.constraint(equalTo: root.topAnchor),
-            dimView.leadingAnchor.constraint(equalTo: root.leadingAnchor),
-            dimView.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-            dimView.bottomAnchor.constraint(equalTo: root.bottomAnchor),
-            backgroundBlur.topAnchor.constraint(equalTo: root.topAnchor),
-            backgroundBlur.leadingAnchor.constraint(equalTo: root.leadingAnchor),
-            backgroundBlur.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-            backgroundBlur.bottomAnchor.constraint(equalTo: root.bottomAnchor),
-            stack.centerYAnchor.constraint(equalTo: root.centerYAnchor),
-            stack.topAnchor.constraint(greaterThanOrEqualTo: root.safeAreaLayoutGuide.topAnchor, constant: 16),
-            stack.bottomAnchor.constraint(lessThanOrEqualTo: root.safeAreaLayoutGuide.bottomAnchor, constant: -16),
-            stack.leadingAnchor.constraint(equalTo: root.safeAreaLayoutGuide.leadingAnchor, constant: 20),
-            stack.trailingAnchor.constraint(equalTo: root.safeAreaLayoutGuide.trailingAnchor, constant: -20),
+            self.dimView.topAnchor.constraint(equalTo: root.topAnchor),
+            self.dimView.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            self.dimView.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+            self.dimView.bottomAnchor.constraint(equalTo: root.bottomAnchor),
+            self.backgroundBlur.topAnchor.constraint(equalTo: root.topAnchor),
+            self.backgroundBlur.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            self.backgroundBlur.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+            self.backgroundBlur.bottomAnchor.constraint(equalTo: root.bottomAnchor),
+            self.stack.centerYAnchor.constraint(equalTo: root.centerYAnchor),
+            self.stack.topAnchor.constraint(greaterThanOrEqualTo: root.safeAreaLayoutGuide.topAnchor, constant: 16),
+            self.stack.bottomAnchor.constraint(lessThanOrEqualTo: root.safeAreaLayoutGuide.bottomAnchor, constant: -16),
+            self.stack.leadingAnchor.constraint(equalTo: root.safeAreaLayoutGuide.leadingAnchor, constant: 20),
+            self.stack.trailingAnchor.constraint(equalTo: root.safeAreaLayoutGuide.trailingAnchor, constant: -20),
             self.cardView.widthAnchor.constraint(lessThanOrEqualToConstant: 560)
         ])
 
@@ -1826,8 +1819,42 @@ private final class BiogramProfileCardViewerController: ViewController {
         )
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        self.cardView.layer.removeAllAnimations()
+        UIView.animate(
+            withDuration: 0.58,
+            delay: 0.04,
+            usingSpringWithDamping: 0.78,
+            initialSpringVelocity: 0.55,
+            options: [.beginFromCurrentState, .allowUserInteraction],
+            animations: {
+                self.dimView.alpha = 1.0
+                self.backgroundBlur.alpha = 0.62
+                self.stack.alpha = 1.0
+                self.cardView.alpha = 1.0
+                self.cardView.transform = .identity
+            }
+        )
+    }
+
     @objc private func closeViewer() {
-        self.dismiss(animated: true)
+        guard self.viewIfLoaded?.window != nil else { return }
+        UIView.animate(
+            withDuration: 0.24,
+            delay: 0.0,
+            options: [.curveEaseIn, .beginFromCurrentState],
+            animations: {
+                self.dimView.alpha = 0.0
+                self.backgroundBlur.alpha = 0.0
+                self.stack.alpha = 0.0
+                self.cardView.alpha = 0.0
+                self.cardView.transform = CGAffineTransform(scaleX: 0.72, y: 0.72).translatedBy(x: 0, y: 20)
+            },
+            completion: { _ in
+                self.dismiss(animated: false)
+            }
+        )
     }
 }
 
