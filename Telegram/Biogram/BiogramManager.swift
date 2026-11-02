@@ -318,7 +318,9 @@ public final class BiogramManager {
 
         let serverPublicIds = Set(profile.publicNumbers.map { $0.id })
         let existingPrivateNumbers = self.cachedVirtualNumbers.filter { $0.isPublic == false }
+        let existingPrivateIds = Set(existingPrivateNumbers.map { $0.id })
         // Migrate legacy nil flags to public once, while avoiding duplicates already present in the cloud.
+        // An explicit local Private choice takes priority over an older public cloud copy.
         let legacyPublicNumbers = self.cachedVirtualNumbers.compactMap { number -> BiogramVirtualNumber? in
             guard number.isPublic == nil, !serverPublicIds.contains(number.id) else {
                 return nil
@@ -327,7 +329,9 @@ public final class BiogramManager {
             migrated.isPublic = true
             return migrated
         }
-        let serverPublicNumbers = profile.publicNumbers.map {
+        let serverPublicNumbers = profile.publicNumbers.filter {
+            !existingPrivateIds.contains($0.id)
+        }.map {
             BiogramVirtualNumber(
                 id: $0.id,
                 label: $0.label,
