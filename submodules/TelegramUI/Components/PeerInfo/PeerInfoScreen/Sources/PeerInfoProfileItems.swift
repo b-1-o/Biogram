@@ -242,7 +242,7 @@ func infoItems(
             ))
         }
         
-        // Own numbers remain visible to the owner. Only numbers explicitly marked Private are excluded from other Biogram profiles.
+        // Custom Biogram decorative numbers are visible on every Biogram profile; this is separate from Telegram phone-number privacy.
         if isMyProfile {
             let localNumbers = BiogramManager.shared.virtualNumbers()
             for (index, localNumber) in localNumbers.enumerated() {
