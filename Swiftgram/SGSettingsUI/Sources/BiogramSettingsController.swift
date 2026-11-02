@@ -1345,7 +1345,7 @@ private final class Biogram3DProfileCardView: UIView {
     }
 }
 
-/// Renders the exact front-face card used in the studio as a compact profile-row thumbnail.
+/// Renders a compact profile-row thumbnail using the selected card palette, artwork and material.
 public func biogramProfileCardThumbnail(
     style: BiogramProfileCardStyle,
     image: UIImage?,
