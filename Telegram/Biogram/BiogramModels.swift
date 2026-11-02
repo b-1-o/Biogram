@@ -213,6 +213,7 @@ public struct BiogramCloudPublicProfile: Codable, Equatable {
     public let aliases: [String]
     public let publicNumbers: [BiogramCloudPublicNumber]
     public let cardImageBase64: String?
+    public let bannerImageBase64: String?
     public let publicEnabled: Bool
     public let updatedAt: Int64
 
@@ -226,6 +227,7 @@ public struct BiogramCloudPublicProfile: Codable, Equatable {
         aliases: [String],
         publicNumbers: [BiogramCloudPublicNumber],
         cardImageBase64: String? = nil,
+        bannerImageBase64: String? = nil,
         publicEnabled: Bool = true,
         updatedAt: Int64 = 0
     ) {
@@ -238,6 +240,7 @@ public struct BiogramCloudPublicProfile: Codable, Equatable {
         self.aliases = aliases
         self.publicNumbers = publicNumbers
         self.cardImageBase64 = cardImageBase64
+        self.bannerImageBase64 = bannerImageBase64
         self.publicEnabled = publicEnabled
         self.updatedAt = updatedAt
     }
@@ -245,6 +248,14 @@ public struct BiogramCloudPublicProfile: Codable, Equatable {
     public var cardImage: UIImage? {
         guard let cardImageBase64,
               let data = Data(base64Encoded: cardImageBase64) else {
+            return nil
+        }
+        return UIImage(data: data)
+    }
+
+    public var bannerImage: UIImage? {
+        guard let bannerImageBase64,
+              let data = Data(base64Encoded: bannerImageBase64) else {
             return nil
         }
         return UIImage(data: data)
