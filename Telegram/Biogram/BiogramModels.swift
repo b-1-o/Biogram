@@ -37,7 +37,7 @@ public struct BiogramVirtualNumber: Codable, Equatable {
     public var label: String?
     public var number: String
     public var createdAt: Date
-    /// `false` keeps a number private. `nil` is the legacy/default public state.
+    /// Deprecated compatibility field. All Biogram decorative numbers are public in Biogram profiles.
     public var isPublic: Bool?
 
     public init(
