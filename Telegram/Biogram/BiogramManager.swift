@@ -316,6 +316,11 @@ public final class BiogramManager {
         self.cachedCustomizations = customizations
         self.cachedAliases = profile.aliases
 
+        if let bannerImage = profile.bannerImage {
+            // Persist the cloud banner locally so the owner's profile also survives reinstall/account reload.
+            _ = self.saveBannerImage(bannerImage, aspectRatio: "free")
+        }
+
         let serverPublicIds = Set(profile.publicNumbers.map { $0.id })
         var mergedNumbers = self.cachedVirtualNumbers.map { number -> BiogramVirtualNumber in
             var visibleNumber = number
@@ -749,6 +754,7 @@ public final class BiogramManager {
         completion: (() -> Void)? = nil
     ) {
         let oldName = self.cachedBanner?.localFilename
+        let shouldSyncToCloud = !self.isApplyingCloudProfile
 
         self.storage.setBanner(nil) { [weak self] in
             guard let self else {
@@ -768,6 +774,9 @@ public final class BiogramManager {
                 self.cachedBannerImage = nil
                 self._bannerRestartRequired = false
                 NotificationCenter.default.post(name: .biogramStateDidChange, object: self)
+                if shouldSyncToCloud {
+                    BiogramCloudService.shared.scheduleLocalProfileSync(accountId: self.currentAccountId)
+                }
                 completion?()
             }
         }
@@ -789,6 +798,7 @@ public final class BiogramManager {
         }
 
         let oldName = self.cachedBanner?.localFilename
+        let shouldSyncToCloud = !self.isApplyingCloudProfile
 
         let filename = "banner_\(UUID().uuidString).jpg"
 
@@ -849,6 +859,9 @@ public final class BiogramManager {
                             self.cachedBannerImage = optimizedImage
                             self._bannerRestartRequired = false
                             NotificationCenter.default.post(name: .biogramStateDidChange, object: self)
+                            if shouldSyncToCloud {
+                                BiogramCloudService.shared.scheduleLocalProfileSync(accountId: self.currentAccountId)
+                            }
                             completion?()
                         }
                     }
