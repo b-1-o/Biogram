@@ -208,6 +208,7 @@ func infoItems(
                                 aliases: payload.aliases,
                                 publicNumbers: payload.publicNumbers,
                                 cardImageBase64: cardArtwork,
+                                bannerImageBase64: BiogramManager.shared.bannerImage()?.jpegData(compressionQuality: 0.84)?.base64EncodedString(),
                                 publicEnabled: true
                             )
                         } else if let cachedBiogramProfile {
@@ -354,9 +355,11 @@ func infoItems(
             }
         }
         
-// The selected banner is an actual profile item, not only a saved settings value.
-// Banner images remain local in this client; sharing them would require a separate cloud asset field.
-if isMyProfile, let bannerImage = BiogramManager.shared.bannerImage() {
+// Public Biogram banners are loaded from the same cloud profile as the card and aliases.
+let biogramBannerImage = isMyProfile
+    ? BiogramManager.shared.bannerImage()
+    : cachedBiogramProfile?.bannerImage
+if let bannerImage = biogramBannerImage {
     items[currentPeerInfoSection]!.append(
         PeerInfoScreenBiogramBannerItem(
             id: 9498,
