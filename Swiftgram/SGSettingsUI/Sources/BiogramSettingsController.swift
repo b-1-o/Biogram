@@ -338,9 +338,8 @@ private enum BiogramEntry: ItemListNodeEntry {
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "VIRTUAL / ANONYMOUS NUMBERS", sectionId: self.section)
         case let .number(_, number):
             let title = number.label ?? number.number
-            let visibility = number.isPublic == false ? "PRIVATE · not shared" : "PUBLIC · visible to Biogram users"
             let detail = number.label != nil ? number.number : "Tap to manage"
-            let label = "\(detail)  ·  \(visibility)"
+            let label = "\(detail)  ·  VISIBLE TO ALL BIOGRAM USERS"
             return ItemListDisclosureItem(presentationData: presentationData, title: title, label: label, sectionId: self.section, style: .blocks, action: { arguments.editOrRemoveNumber(number) })
         case .addNumber:
             return ItemListActionItem(presentationData: presentationData, title: "Add Number", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: { arguments.addNumber() })
@@ -383,7 +382,7 @@ private enum BiogramEntry: ItemListNodeEntry {
             let imageLabel = hasImage ? "Custom artwork" : "Color material"
             return ItemListDisclosureItem(presentationData: presentationData, title: "Customize 3D card", label: "\(style.paletteName) · \(style.material.capitalized) · \(imageLabel)", sectionId: self.section, style: .blocks, action: { arguments.openProfileCard() })
         case .info:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Profile color symbols, Biogram aliases, card material and artwork are shown to other Biogram users. Anonymous numbers are public by default; mark a number Private from its menu to hide it. Tap the card to flip it; drag to tilt it in 3D."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Profile color symbols, Biogram aliases, card material, artwork and all decorative anonymous Biogram numbers are visible to other Biogram users. This does not change the privacy of your actual Telegram phone number. Tap the card to flip it; drag to tilt it in 3D."), sectionId: self.section)
         }
     }
 }
@@ -591,7 +590,7 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
             ) { value in
                 let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmed.isEmpty else { return false }
-                BiogramManager.shared.addVirtualNumber(BiogramVirtualNumber(number: trimmed)) {
+                BiogramManager.shared.addVirtualNumber(BiogramVirtualNumber(number: trimmed, isPublic: true)) {
                     Queue.mainQueue().async { updateState() }
                 }
                 return true
@@ -599,14 +598,7 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
             presentControllerImpl?(controller, nil)
         },
         editOrRemoveNumber: { number in
-            let currentlyPublic = number.isPublic != false
-            let visibilityTitle = currentlyPublic ? "Hide from other Biogram profiles" : "Show on public Biogram profiles"
-            let alert = BiogramActionsAlertController(title: number.number, message: "Edit, publish or remove this number", actions: [
-                (title: visibilityTitle, destructive: false, action: {
-                    BiogramManager.shared.setVirtualNumberPublic(id: number.id, isPublic: !currentlyPublic) {
-                        Queue.mainQueue().async { updateState() }
-                    }
-                }),
+            let alert = BiogramActionsAlertController(title: number.number, message: "This decorative Biogram number is visible to all Biogram users. Edit or remove it.", actions: [
                 (title: "Edit", destructive: false, action: {
                     let presentationData = context.sharedContext.currentPresentationData.with { $0 }
                     let editCtrl = biogramPrompt(
