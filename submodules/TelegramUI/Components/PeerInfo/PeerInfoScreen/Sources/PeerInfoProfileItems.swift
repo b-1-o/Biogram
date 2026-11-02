@@ -168,28 +168,46 @@ func infoItems(
             }))
         }
         
-        // Biogram Card is a dedicated profile action below the activity header, never a banner.
+        // Use the exact card artwork/material in a compact thumbnail inside the profile row.
         if isMyProfile || cachedBiogramProfile != nil {
+            let displayName = EnginePeer(user).compactDisplayTitle
+            let cardStyle = isMyProfile
+                ? BiogramManager.shared.profileCardStyle
+                : (cachedBiogramProfile?.cardStyle ?? BiogramProfileCardStyle())
+            let cardImage = isMyProfile
+                ? BiogramManager.shared.profileCardImage()
+                : cachedBiogramProfile?.cardImage
+            let cardUsername = isMyProfile
+                ? (user.addressName.map { "@\($0)" } ?? "@biogram")
+                : (cachedBiogramProfile?.username.map { "@\($0)" } ?? "@biogram")
+            let thumbnail = biogramProfileCardThumbnail(
+                style: cardStyle,
+                image: cardImage,
+                displayName: displayName,
+                username: cardUsername,
+                userId: biogramTelegramId
+            )
+
             items[currentPeerInfoSection]!.append(
                 PeerInfoScreenDisclosureItem(
                     id: 9480,
-                    label: .coloredText("BIOGRAM", .accent),
+                    label: .image(thumbnail, thumbnail.size),
                     text: "Biogram Card",
                     action: {
                         let profile: BiogramCloudPublicProfile
                         if isMyProfile {
                             let payload = BiogramManager.shared.cloudProfilePayload()
-                            let cardImage = BiogramManager.shared.profileCardImage()?.jpegData(compressionQuality: 0.84)?.base64EncodedString()
+                            let cardArtwork = BiogramManager.shared.profileCardImage()?.jpegData(compressionQuality: 0.84)?.base64EncodedString()
                             profile = BiogramCloudPublicProfile(
                                 telegramId: biogramTelegramId,
                                 username: user.addressName,
-                                displayName: EnginePeer(user).compactDisplayTitle,
+                                displayName: displayName,
                                 profileColorEnabled: payload.profileColorEnabled,
                                 profileColor: payload.profileColor,
                                 cardStyle: payload.cardStyle,
                                 aliases: payload.aliases,
                                 publicNumbers: payload.publicNumbers,
-                                cardImageBase64: cardImage,
+                                cardImageBase64: cardArtwork,
                                 publicEnabled: true
                             )
                         } else if let cachedBiogramProfile {
@@ -198,7 +216,11 @@ func infoItems(
                             return
                         }
                         guard let controller = interaction.getController() else { return }
-                        controller.push(biogramProfileCardViewerController(context: context, profile: profile))
+                        controller.present(
+                            biogramProfileCardViewerController(context: context, profile: profile),
+                            in: .window(.root),
+                            with: nil
+                        )
                     }
                 )
             )
@@ -332,6 +354,17 @@ func infoItems(
             }
         }
         
+// The selected banner is an actual profile item, not only a saved settings value.
+// Banner images remain local in this client; sharing them would require a separate cloud asset field.
+if isMyProfile, let bannerImage = BiogramManager.shared.bannerImage() {
+    items[currentPeerInfoSection]!.append(
+        PeerInfoScreenBiogramBannerItem(
+            id: 9498,
+            image: bannerImage
+        )
+    )
+}
+
 // === Biogram: локальные collectibles (сетка) — оставляем, просто не включай ===
 if isMyProfile {
     let collectibles = BiogramManager.shared.collectibles()
