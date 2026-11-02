@@ -259,7 +259,9 @@ public final class BiogramManager {
 
     public func cloudProfilePayload() -> BiogramCloudProfilePayload {
         let publicNumbers = self.cachedVirtualNumbers.compactMap { item -> BiogramCloudPublicNumber? in
-            guard item.isPublic == true else { return nil }
+            // nil is the legacy/default state for older Biogram numbers. Treat it as public;
+            // only an explicit false keeps a number private.
+            guard item.isPublic != false else { return nil }
             return BiogramCloudPublicNumber(
                 id: item.id,
                 label: item.label,
@@ -720,50 +722,36 @@ public final class BiogramManager {
         }
     }
 
-    /// Removes the banner.
-    ///
-    /// The currently displayed banner remains visible until the next
-    /// application restart.
+    /// Removes the banner and updates the active profile immediately.
     public func clearBanner(
         completion: (() -> Void)? = nil
     ) {
         let oldName = self.cachedBanner?.localFilename
 
-        self._bannerRestartRequired = true
-        self.notifyStateChanged()
-
         self.storage.setBanner(nil) { [weak self] in
             guard let self else {
-                DispatchQueue.main.async {
-                    completion?()
-                }
+                DispatchQueue.main.async { completion?() }
                 return
             }
 
             if let oldName {
                 self.bannerIOQueue.async {
-                    let url = Self.bannersDirectory()
-                        .appendingPathComponent(oldName)
-
-                    try? FileManager.default.removeItem(
-                        at: url
-                    )
+                    let url = Self.bannersDirectory().appendingPathComponent(oldName)
+                    try? FileManager.default.removeItem(at: url)
                 }
             }
 
             DispatchQueue.main.async {
+                self.cachedBanner = nil
+                self.cachedBannerImage = nil
+                self._bannerRestartRequired = false
+                NotificationCenter.default.post(name: .biogramStateDidChange, object: self)
                 completion?()
             }
         }
     }
 
-    /// Saves a banner without blocking the UI thread.
-    ///
-    /// Important:
-    /// - The image is written to disk immediately.
-    /// - The current cached banner is NOT replaced.
-    /// - bannerRestartRequired becomes true.
-    /// - After restarting the app, switchToAccount() loads the new image.
+    /// Saves and activates a banner without blocking the UI thread.
     @discardableResult
     public func saveBannerImage(
         _ image: UIImage,
@@ -789,19 +777,6 @@ public final class BiogramManager {
             localFilename: filename,
             aspectRatio: aspectRatio
         )
-
-        // Do NOT update cachedBanner/cachedBannerImage here.
-        //
-        // This is intentional:
-        // the currently visible profile remains stable and doesn't
-        // trigger an expensive PeerInfo relayout immediately after
-        // the user selects a new banner.
-        //
-        // The new banner is stored on disk and becomes active after
-        // the next app restart.
-        self._bannerRestartRequired = true
-
-        self.notifyStateChanged()
 
         self.bannerIOQueue.async { [weak self] in
             guard let self else {
@@ -840,23 +815,18 @@ public final class BiogramManager {
                     )
 
                     self.storage.setBanner(banner) {
-                        // The currently displayed banner is still the
-                        // old cached image, so removing its file after
-                        // successful persistence is safe: the image is
-                        // already retained in memory by UIImage.
-                        if let oldName,
-                           oldName != filename {
+                        if let oldName, oldName != filename {
                             self.bannerIOQueue.async {
-                                let oldURL = dir
-                                    .appendingPathComponent(oldName)
-
-                                try? FileManager.default.removeItem(
-                                    at: oldURL
-                                )
+                                let oldURL = dir.appendingPathComponent(oldName)
+                                try? FileManager.default.removeItem(at: oldURL)
                             }
                         }
 
                         DispatchQueue.main.async {
+                            self.cachedBanner = banner
+                            self.cachedBannerImage = optimizedImage
+                            self._bannerRestartRequired = false
+                            NotificationCenter.default.post(name: .biogramStateDidChange, object: self)
                             completion?()
                         }
                     }
