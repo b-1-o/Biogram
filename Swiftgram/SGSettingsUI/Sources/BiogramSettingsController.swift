@@ -1452,7 +1452,7 @@ public func biogramProfileCardThumbnail(
             withAttributes: nameTextAttributes
         )
 
-        let handle = username.hasPrefix("@") ? username : "@\\(username)"
+        let handle = username.hasPrefix("@") ? username : "@\(username)"
         let handleAttributes: [NSAttributedString.Key: Any] = [
             .font: UIFont.systemFont(ofSize: 5.0, weight: .medium),
             .foregroundColor: UIColor.white.withAlphaComponent(0.80)
