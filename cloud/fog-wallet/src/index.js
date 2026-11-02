@@ -425,6 +425,32 @@ async function saveCardImage(request, env, user) {
   return json({ ok: true, sizeBytes: bytes.byteLength, updatedAt: timestamp });
 }
 
+async function saveBannerImage(request, env, user) {
+  if (request.method === "DELETE") {
+    await env.DB.prepare("DELETE FROM biogram_profile_banners WHERE user_id = ?").bind(user.id).run();
+    return json({ ok: true });
+  }
+  if (request.method !== "PUT") return fail("method_not_allowed", 405);
+  const input = await readJson(request, 512 * 1024);
+  const imageBase64 = String(input.imageBase64 || "");
+  if (!imageBase64 || imageBase64.length > Math.ceil(MAX_IMAGE_BYTES * 4 / 3) + 16) return fail("invalid_image", 413);
+  let bytes;
+  try {
+    bytes = Uint8Array.from(atob(imageBase64.replace(/^data:image\/jpeg;base64,/, "")), value => value.charCodeAt(0));
+  } catch {
+    return fail("invalid_image_encoding", 400);
+  }
+  if (bytes.byteLength === 0 || bytes.byteLength > MAX_IMAGE_BYTES || bytes[0] !== 0xff || bytes[1] !== 0xd8) {
+    return fail("invalid_image_format_or_size", 413);
+  }
+  const normalized = btoa(Array.from(bytes, value => String.fromCharCode(value)).join(""));
+  const timestamp = nowSeconds();
+  await env.DB.prepare(
+    "INSERT INTO biogram_profile_banners (user_id, mime_type, data_base64, size_bytes, updated_at) VALUES (?, 'image/jpeg', ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET mime_type = excluded.mime_type, data_base64 = excluded.data_base64, size_bytes = excluded.size_bytes, updated_at = excluded.updated_at"
+  ).bind(user.id, normalized, bytes.byteLength, timestamp).run();
+  return json({ ok: true, sizeBytes: bytes.byteLength, updatedAt: timestamp });
+}
+
 async function getProfile(request, env, user, isOwnProfile) {
   const userId = isOwnProfile ? user.id : null;
   const telegramId = isOwnProfile ? user.telegram_id : decodeURIComponent(new URL(request.url).pathname.split("/").pop() || "");
@@ -441,6 +467,9 @@ async function getProfile(request, env, user, isOwnProfile) {
   if (!target || (!isOwnProfile && target.public_enabled !== 1)) return fail("profile_not_found", 404);
   const asset = await env.DB.prepare(
     "SELECT data_base64 FROM biogram_profile_assets WHERE user_id = ? LIMIT 1"
+  ).bind(target.id).first();
+  const bannerAsset = await env.DB.prepare(
+    "SELECT data_base64 FROM biogram_profile_banners WHERE user_id = ? LIMIT 1"
   ).bind(target.id).first();
 
   let customization = {};
@@ -461,6 +490,7 @@ async function getProfile(request, env, user, isOwnProfile) {
       aliases: Array.isArray(customization.aliases) ? customization.aliases : [],
       publicNumbers: Array.isArray(customization.publicNumbers) ? customization.publicNumbers : [],
       cardImageBase64: asset?.data_base64 || null,
+      bannerImageBase64: bannerAsset?.data_base64 || null,
       publicEnabled: target.public_enabled === 1,
       updatedAt: Number(target.updated_at || 0)
     }
@@ -532,6 +562,15 @@ export default {
         return await saveCardImage(request, env, user);
       } catch (error) {
         return fail(error?.message || "card_image_update_failed", 400);
+      }
+    }
+
+    if (url.pathname === "/v1/profile/me/banner-image") {
+      if (!user) return fail("unauthorized", 401);
+      try {
+        return await saveBannerImage(request, env, user);
+      } catch (error) {
+        return fail(error?.message || "banner_image_update_failed", 400);
       }
     }
 
