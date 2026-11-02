@@ -1075,6 +1075,7 @@ private final class Biogram3DProfileCardView: UIView {
         self.backMagneticStrip.backgroundColor = UIColor.black.withAlphaComponent(0.38)
         self.backMagneticStrip.layer.borderWidth = 0.5
         self.backMagneticStrip.layer.borderColor = UIColor.white.withAlphaComponent(0.12).cgColor
+        self.backMagneticStrip.translatesAutoresizingMaskIntoConstraints = false
         self.back.addSubview(self.backMagneticStrip)
 
         self.backHandleLabel.font = UIFont.systemFont(ofSize: 17, weight: .semibold)
@@ -1173,7 +1174,6 @@ private final class Biogram3DProfileCardView: UIView {
 
             self.backSignatureLabel.leadingAnchor.constraint(equalTo: self.back.leadingAnchor, constant: 22),
             self.backSignatureLabel.trailingAnchor.constraint(equalTo: self.backHashPatternView.leadingAnchor, constant: -10),
-            self.backSignatureLabel.trailingAnchor.constraint(equalTo: self.back.trailingAnchor, constant: -22),
             self.backSignatureLabel.bottomAnchor.constraint(equalTo: self.backFooterLabel.topAnchor, constant: -17),
             self.backFooterLabel.leadingAnchor.constraint(equalTo: self.back.leadingAnchor, constant: 22),
             self.backFooterLabel.trailingAnchor.constraint(equalTo: self.back.trailingAnchor, constant: -22),
@@ -1685,14 +1685,14 @@ private final class BiogramProfileCardViewerController: ViewController {
         stack.addArrangedSubview(top)
 
         let heading = UILabel()
-        heading.text = "A personal profile signature."
+        heading.text = "Your Biogram card"
         heading.font = UIFont.systemFont(ofSize: 25, weight: .semibold)
         heading.textColor = .white
         heading.numberOfLines = 2
         stack.addArrangedSubview(heading)
 
         let subtitle = UILabel()
-        subtitle.text = "Tap to flip the card. Drag to inspect its glass surface and perspective."
+        subtitle.text = "A custom two-sided identity card. Tap to reveal its profile details and visual hash."
         subtitle.font = UIFont.systemFont(ofSize: 13, weight: .regular)
         subtitle.textColor = UIColor.white.withAlphaComponent(0.58)
         subtitle.numberOfLines = 0
@@ -1703,7 +1703,7 @@ private final class BiogramProfileCardViewerController: ViewController {
         self.cardView.heightAnchor.constraint(equalTo: self.cardView.widthAnchor, multiplier: 0.63).isActive = true
 
         let hint = UILabel()
-        hint.text = "FRONT / BACK  ·  PERSONAL IDENTIFIER  ·  BIOGRAM"
+        hint.text = "FRONT / BACK  ·  PROFILE DETAILS  ·  VISUAL HASH"
         hint.font = UIFont.monospacedSystemFont(ofSize: 8, weight: .medium)
         hint.textColor = UIColor.white.withAlphaComponent(0.42)
         hint.numberOfLines = 0
