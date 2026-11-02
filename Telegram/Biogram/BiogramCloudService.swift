@@ -371,6 +371,7 @@ public final class BiogramCloudService {
             }
             guard error == nil, response?.statusCode == 200 else { return }
             self.syncCardArtwork(accountId: accountId, token: token)
+            self.syncBannerArtwork(accountId: accountId, token: token)
         }
     }
 
@@ -417,6 +418,25 @@ public final class BiogramCloudService {
                 return
             }
 
+            guard let data = Self.encodedCardImage(image, maximumBytes: 327680) else { return }
+            let body = try? JSONEncoder().encode(BiogramCloudImagePayload(imageBase64: data.base64EncodedString()))
+            guard let body else { return }
+            let request = self.makeRequest(path: path, method: "PUT", body: body, token: token)
+            self.send(request) { _, _, _ in }
+        }
+    }
+
+    private func syncBannerArtwork(accountId: String, token: String) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self,
+                  BiogramManager.shared.activeAccountId == accountId,
+                  BiogramManager.shared.isLoaded else { return }
+            let path = "v1/profile/me/banner-image"
+            guard let image = BiogramManager.shared.bannerImage() else {
+                let request = self.makeRequest(path: path, method: "DELETE", token: token)
+                self.send(request) { _, _, _ in }
+                return
+            }
             guard let data = Self.encodedCardImage(image, maximumBytes: 327680) else { return }
             let body = try? JSONEncoder().encode(BiogramCloudImagePayload(imageBase64: data.base64EncodedString()))
             guard let body else { return }
