@@ -316,7 +316,17 @@ public final class BiogramManager {
         self.cachedCustomizations = customizations
         self.cachedAliases = profile.aliases
 
-        let existingPrivateNumbers = self.cachedVirtualNumbers.filter { $0.isPublic != true }
+        let serverPublicIds = Set(profile.publicNumbers.map { $0.id })
+        let existingPrivateNumbers = self.cachedVirtualNumbers.filter { $0.isPublic == false }
+        // Migrate legacy nil flags to public once, while avoiding duplicates already present in the cloud.
+        let legacyPublicNumbers = self.cachedVirtualNumbers.compactMap { number -> BiogramVirtualNumber? in
+            guard number.isPublic == nil, !serverPublicIds.contains(number.id) else {
+                return nil
+            }
+            var migrated = number
+            migrated.isPublic = true
+            return migrated
+        }
         let serverPublicNumbers = profile.publicNumbers.map {
             BiogramVirtualNumber(
                 id: $0.id,
@@ -325,7 +335,7 @@ public final class BiogramManager {
                 isPublic: true
             )
         }
-        self.cachedVirtualNumbers = existingPrivateNumbers + serverPublicNumbers
+        self.cachedVirtualNumbers = existingPrivateNumbers + serverPublicNumbers + legacyPublicNumbers
 
         self.storage.setCustomizations(customizations)
         self.storage.replaceAliases(profile.aliases)
@@ -335,6 +345,9 @@ public final class BiogramManager {
 
         guard let image = profile.cardImage else {
             self.isApplyingCloudProfile = false
+            if !legacyPublicNumbers.isEmpty {
+                BiogramCloudService.shared.scheduleLocalProfileSync(accountId: accountId)
+            }
             completion?()
             return
         }
@@ -342,6 +355,9 @@ public final class BiogramManager {
         self.setProfileCardImage(image) { [weak self] in
             guard let self else { completion?(); return }
             self.isApplyingCloudProfile = false
+            if !legacyPublicNumbers.isEmpty {
+                BiogramCloudService.shared.scheduleLocalProfileSync(accountId: accountId)
+            }
             completion?()
         }
     }
