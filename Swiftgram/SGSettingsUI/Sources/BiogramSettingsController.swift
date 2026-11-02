@@ -1716,6 +1716,7 @@ private final class BiogramProfileCardViewerController: ViewController {
     private let dimView = UIView()
     private let backgroundBlur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
     private let stack = UIStackView()
+    private var isClosing = false
 
     init(profile: BiogramCloudPublicProfile) {
         self.profile = profile
@@ -1839,7 +1840,8 @@ private final class BiogramProfileCardViewerController: ViewController {
     }
 
     @objc private func closeViewer() {
-        guard self.viewIfLoaded?.window != nil else { return }
+        guard !self.isClosing, self.viewIfLoaded?.window != nil else { return }
+        self.isClosing = true
         UIView.animate(
             withDuration: 0.24,
             delay: 0.0,
