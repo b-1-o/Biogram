@@ -99,7 +99,7 @@ func infoItems(
             BiogramCloudService.shared.loadPublicProfile(for: biogramTelegramId) { latestProfile in
                 // Rebuild the profile only when the remote card/profile data actually changed.
                 if latestProfile != cachedBiogramProfile {
-                    interaction.requestLayout(.animated(duration: 0.2, curve: .easeInOut))
+                    interaction.requestLayout(true)
                 }
             }
         }
