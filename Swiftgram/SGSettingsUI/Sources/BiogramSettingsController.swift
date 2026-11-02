@@ -1353,21 +1353,117 @@ public func biogramProfileCardThumbnail(
     username: String,
     userId: String
 ) -> UIImage {
-    let size = CGSize(width: 260, height: 164)
-    let card = Biogram3DProfileCardView(frame: CGRect(origin: .zero, size: size))
-    card.configure(
-        style: style,
-        image: image,
-        displayName: displayName,
-        username: username,
-        userId: userId
-    )
-    card.setNeedsLayout()
-    card.layoutIfNeeded()
-
+    // This image is used in a standard disclosure row, so keep its point size
+    // within the row's height while rendering at the device's native scale.
+    let size = CGSize(width: 82, height: 52)
+    let bounds = CGRect(origin: .zero, size: size)
+    let cornerRadius: CGFloat = 7
+    let (main, shade) = biogramCardPalette(style.paletteName)
     let renderer = UIGraphicsImageRenderer(size: size)
-    return renderer.image { context in
-        card.layer.render(in: context.cgContext)
+
+    return renderer.image { rendererContext in
+        let cgContext = rendererContext.cgContext
+        let cardPath = UIBezierPath(roundedRect: bounds, cornerRadius: cornerRadius)
+        cgContext.saveGState()
+        cardPath.addClip()
+
+        if let gradient = CGGradient(
+            colorsSpace: CGColorSpaceCreateDeviceRGB(),
+            colors: [main.cgColor, shade.cgColor, biogramCardColor("#101014").cgColor] as CFArray,
+            locations: [0.0, 0.62, 1.0]
+        ) {
+            cgContext.drawLinearGradient(
+                gradient,
+                start: CGPoint(x: 0, y: 0),
+                end: CGPoint(x: size.width, y: size.height),
+                options: []
+            )
+        }
+
+        if let image, image.size.width > 0, image.size.height > 0 {
+            let scale = max(size.width / image.size.width, size.height / image.size.height)
+            let imageSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+            let imageRect = CGRect(
+                x: (size.width - imageSize.width) * 0.5,
+                y: (size.height - imageSize.height) * 0.5,
+                width: imageSize.width,
+                height: imageSize.height
+            )
+            image.draw(in: imageRect, blendMode: .screen, alpha: 0.28)
+        }
+
+        let sheenColors = style.material == "matte"
+            ? [UIColor.white.withAlphaComponent(0.12).cgColor, UIColor.clear.cgColor] as CFArray
+            : [UIColor.white.withAlphaComponent(0.30).cgColor, UIColor.clear.cgColor, UIColor.white.withAlphaComponent(0.08).cgColor] as CFArray
+        if let sheen = CGGradient(
+            colorsSpace: CGColorSpaceCreateDeviceRGB(),
+            colors: sheenColors,
+            locations: style.material == "matte" ? [0.0, 1.0] : [0.0, 0.58, 1.0]
+        ) {
+            cgContext.drawLinearGradient(
+                sheen,
+                start: CGPoint(x: 0, y: 0),
+                end: CGPoint(x: size.width, y: size.height),
+                options: []
+            )
+        }
+        cgContext.restoreGState()
+
+        cardPath.lineWidth = 0.8
+        UIColor.white.withAlphaComponent(0.52).setStroke()
+        cardPath.stroke()
+
+        let brandAttributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: 6.2, weight: .heavy),
+            .foregroundColor: UIColor.white.withAlphaComponent(0.96)
+        ]
+        ("BIOGRAM" as NSString).draw(at: CGPoint(x: 7, y: 6), withAttributes: brandAttributes)
+
+        let editionAttributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont.monospacedSystemFont(ofSize: 3.8, weight: .semibold),
+            .foregroundColor: UIColor.white.withAlphaComponent(0.74)
+        ]
+        ("PRIVATE PROFILE" as NSString).draw(at: CGPoint(x: 48, y: 7), withAttributes: editionAttributes)
+
+        let chip = UIBezierPath(roundedRect: CGRect(x: 7, y: 18, width: 13, height: 9), cornerRadius: 2)
+        UIColor.white.withAlphaComponent(0.14).setFill()
+        chip.fill()
+        UIColor.white.withAlphaComponent(0.60).setStroke()
+        chip.lineWidth = 0.55
+        chip.stroke()
+        let chipLine = UIBezierPath()
+        chipLine.move(to: CGPoint(x: 13.5, y: 19))
+        chipLine.addLine(to: CGPoint(x: 13.5, y: 26))
+        UIColor.white.withAlphaComponent(0.42).setStroke()
+        chipLine.lineWidth = 0.45
+        chipLine.stroke()
+
+        let nameAttributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: 7.2, weight: .semibold),
+            .foregroundColor: UIColor.white
+        ]
+        let nameParagraph = NSMutableParagraphStyle()
+        nameParagraph.lineBreakMode = .byTruncatingTail
+        var nameTextAttributes = nameAttributes
+        nameTextAttributes[.paragraphStyle] = nameParagraph
+        let safeName = displayName.isEmpty ? "BIOGRAM MEMBER" : displayName.uppercased()
+        (safeName as NSString).draw(
+            in: CGRect(x: 7, y: 30, width: 68, height: 9),
+            withAttributes: nameTextAttributes
+        )
+
+        let handle = username.hasPrefix("@") ? username : "@\\(username)"
+        let handleAttributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: 5.0, weight: .medium),
+            .foregroundColor: UIColor.white.withAlphaComponent(0.80)
+        ]
+        (handle as NSString).draw(at: CGPoint(x: 7, y: 39), withAttributes: handleAttributes)
+
+        let signatureAttributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont.monospacedSystemFont(ofSize: 3.8, weight: .medium),
+            .foregroundColor: UIColor.white.withAlphaComponent(0.70)
+        ]
+        (biogramCardSignature(userId) as NSString).draw(at: CGPoint(x: 7, y: 46), withAttributes: signatureAttributes)
     }
 }
 
@@ -1724,7 +1820,6 @@ private final class BiogramProfileCardViewerController: ViewController {
             stack.bottomAnchor.constraint(lessThanOrEqualTo: root.safeAreaLayoutGuide.bottomAnchor, constant: -16),
             stack.leadingAnchor.constraint(equalTo: root.safeAreaLayoutGuide.leadingAnchor, constant: 20),
             stack.trailingAnchor.constraint(equalTo: root.safeAreaLayoutGuide.trailingAnchor, constant: -20),
-            stack.centerYAnchor.constraint(lessThanOrEqualTo: root.safeAreaLayoutGuide.centerYAnchor),
             self.cardView.widthAnchor.constraint(lessThanOrEqualToConstant: 560)
         ])
 
