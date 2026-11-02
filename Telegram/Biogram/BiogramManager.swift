@@ -258,11 +258,11 @@ public final class BiogramManager {
 
 
     public func cloudProfilePayload() -> BiogramCloudProfilePayload {
-        let publicNumbers = self.cachedVirtualNumbers.compactMap { item -> BiogramCloudPublicNumber? in
-            // nil is the legacy/default state for older Biogram numbers. Treat it as public;
-            // only an explicit false keeps a number private.
-            guard item.isPublic != false else { return nil }
-            return BiogramCloudPublicNumber(
+        // Biogram virtual numbers are decorative profile identifiers, not the user's
+        // Telegram phone number. Publish every one to Biogram profiles regardless of
+        // the legacy isPublic flag or Telegram's phone-number privacy setting.
+        let publicNumbers = self.cachedVirtualNumbers.map { item in
+            BiogramCloudPublicNumber(
                 id: item.id,
                 label: item.label,
                 number: item.number,
@@ -317,29 +317,31 @@ public final class BiogramManager {
         self.cachedAliases = profile.aliases
 
         let serverPublicIds = Set(profile.publicNumbers.map { $0.id })
-        let existingPrivateNumbers = self.cachedVirtualNumbers.filter { $0.isPublic == false }
-        let existingPrivateIds = Set(existingPrivateNumbers.map { $0.id })
-        // Migrate legacy nil flags to public once, while avoiding duplicates already present in the cloud.
-        // An explicit local Private choice takes priority over an older public cloud copy.
-        let legacyPublicNumbers = self.cachedVirtualNumbers.compactMap { number -> BiogramVirtualNumber? in
-            guard number.isPublic == nil, !serverPublicIds.contains(number.id) else {
-                return nil
-            }
-            var migrated = number
-            migrated.isPublic = true
-            return migrated
+        var mergedNumbers = self.cachedVirtualNumbers.map { number -> BiogramVirtualNumber in
+            var visibleNumber = number
+            visibleNumber.isPublic = true
+            return visibleNumber
         }
-        let serverPublicNumbers = profile.publicNumbers.filter {
-            !existingPrivateIds.contains($0.id)
-        }.map {
-            BiogramVirtualNumber(
-                id: $0.id,
-                label: $0.label,
-                number: $0.number,
-                isPublic: true
+        var mergedNumberIds = Set(mergedNumbers.map { $0.id })
+
+        // Merge any profile numbers from Cloudflare that are not on this device.
+        // A local copy with the same id is kept so a recent local edit is not overwritten.
+        for number in profile.publicNumbers where !mergedNumberIds.contains(number.id) {
+            mergedNumbers.append(
+                BiogramVirtualNumber(
+                    id: number.id,
+                    label: number.label,
+                    number: number.number,
+                    isPublic: true
+                )
             )
+            mergedNumberIds.insert(number.id)
         }
-        self.cachedVirtualNumbers = existingPrivateNumbers + serverPublicNumbers + legacyPublicNumbers
+
+        let shouldRepublishNumbers =
+            self.cachedVirtualNumbers.contains(where: { $0.isPublic != true })
+            || mergedNumberIds != serverPublicIds
+        self.cachedVirtualNumbers = mergedNumbers
 
         self.storage.setCustomizations(customizations)
         self.storage.replaceAliases(profile.aliases)
@@ -349,7 +351,7 @@ public final class BiogramManager {
 
         guard let image = profile.cardImage else {
             self.isApplyingCloudProfile = false
-            if !legacyPublicNumbers.isEmpty {
+            if shouldRepublishNumbers {
                 BiogramCloudService.shared.scheduleLocalProfileSync(accountId: accountId)
             }
             completion?()
@@ -359,7 +361,7 @@ public final class BiogramManager {
         self.setProfileCardImage(image) { [weak self] in
             guard let self else { completion?(); return }
             self.isApplyingCloudProfile = false
-            if !legacyPublicNumbers.isEmpty {
+            if shouldRepublishNumbers {
                 BiogramCloudService.shared.scheduleLocalProfileSync(accountId: accountId)
             }
             completion?()
