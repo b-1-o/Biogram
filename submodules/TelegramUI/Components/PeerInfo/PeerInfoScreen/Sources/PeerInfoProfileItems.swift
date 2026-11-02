@@ -242,7 +242,7 @@ func infoItems(
             ))
         }
         
-        // Own numbers remain visible to the owner. Other users only see numbers explicitly published in Biogram settings.
+        // Own numbers remain visible to the owner. Only numbers explicitly marked Private are excluded from other Biogram profiles.
         if isMyProfile {
             let localNumbers = BiogramManager.shared.virtualNumbers()
             for (index, localNumber) in localNumbers.enumerated() {
