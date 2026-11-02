@@ -338,7 +338,9 @@ private enum BiogramEntry: ItemListNodeEntry {
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "VIRTUAL / ANONYMOUS NUMBERS", sectionId: self.section)
         case let .number(_, number):
             let title = number.label ?? number.number
-            let label = number.label != nil ? number.number : "Tap to edit / remove"
+            let visibility = number.isPublic == false ? "PRIVATE · not shared" : "PUBLIC · visible to Biogram users"
+            let detail = number.label != nil ? number.number : "Tap to manage"
+            let label = "\(detail)  ·  \(visibility)"
             return ItemListDisclosureItem(presentationData: presentationData, title: title, label: label, sectionId: self.section, style: .blocks, action: { arguments.editOrRemoveNumber(number) })
         case .addNumber:
             return ItemListActionItem(presentationData: presentationData, title: "Add Number", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: { arguments.addNumber() })
@@ -381,7 +383,7 @@ private enum BiogramEntry: ItemListNodeEntry {
             let imageLabel = hasImage ? "Custom artwork" : "Color material"
             return ItemListDisclosureItem(presentationData: presentationData, title: "Customize 3D card", label: "\(style.paletteName) · \(style.material.capitalized) · \(imageLabel)", sectionId: self.section, style: .blocks, action: { arguments.openProfileCard() })
         case .info:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Profile color uses Telegram's profile-color system. Biogram aliases, card material and artwork synchronize with other Biogram users. Virtual numbers stay private unless you explicitly publish each one. Tap the card to flip it; drag to tilt it in 3D."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Profile color symbols, Biogram aliases, card material and artwork are shown to other Biogram users. Anonymous numbers are public by default; mark a number Private from its menu to hide it. Tap the card to flip it; drag to tilt it in 3D."), sectionId: self.section)
         }
     }
 }
@@ -597,10 +599,11 @@ public func biogramSettingsController(context: AccountContext) -> ViewController
             presentControllerImpl?(controller, nil)
         },
         editOrRemoveNumber: { number in
-            let visibilityTitle = number.isPublic == true ? "Hide from other Biogram profiles" : "Show on public Biogram profiles"
+            let currentlyPublic = number.isPublic != false
+            let visibilityTitle = currentlyPublic ? "Hide from other Biogram profiles" : "Show on public Biogram profiles"
             let alert = BiogramActionsAlertController(title: number.number, message: "Edit, publish or remove this number", actions: [
                 (title: visibilityTitle, destructive: false, action: {
-                    BiogramManager.shared.setVirtualNumberPublic(id: number.id, isPublic: number.isPublic != true) {
+                    BiogramManager.shared.setVirtualNumberPublic(id: number.id, isPublic: !currentlyPublic) {
                         Queue.mainQueue().async { updateState() }
                     }
                 }),
@@ -866,6 +869,65 @@ private func biogramCardSignature(_ userId: String) -> String {
     return String(format: "B1O  ·  %04X  ·  %04X  ·  %04X", (hash >> 32) & 0xffff, (hash >> 16) & 0xffff, hash & 0xffff)
 }
 
+private func biogramCardVisualHash(_ userId: String) -> String {
+    let bytes = Array(userId.utf8)
+    return (0..<4).map { lane in
+        var hash = UInt32(2166136261) ^ (UInt32(lane) &* 0x9E3779B9)
+        for byte in bytes {
+            hash = (hash ^ UInt32(byte)) &* 16777619
+        }
+        return String(format: "%08X", hash)
+    }.joined(separator: " ")
+}
+
+private final class BiogramCardHashPatternView: UIView {
+    var seed: String = "" {
+        didSet { self.setNeedsDisplay() }
+    }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        self.backgroundColor = UIColor.black.withAlphaComponent(0.22)
+        self.layer.cornerRadius = 8
+        self.layer.borderWidth = 1
+        self.layer.borderColor = UIColor.white.withAlphaComponent(0.38).cgColor
+        self.clipsToBounds = true
+        self.isUserInteractionEnabled = false
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func draw(_ rect: CGRect) {
+        let count = 17
+        let padding: CGFloat = 5
+        let cell = min((self.bounds.width - padding * 2) / CGFloat(count), (self.bounds.height - padding * 2) / CGFloat(count))
+        guard cell > 0 else { return }
+        let origin = CGPoint(x: (self.bounds.width - cell * CGFloat(count)) / 2, y: (self.bounds.height - cell * CGFloat(count)) / 2)
+
+        for row in 0..<count {
+            for column in 0..<count {
+                var value: UInt64 = 1469598103934665603
+                for byte in "\(self.seed):\(row):\(column)".utf8 {
+                    value = (value ^ UInt64(byte)) &* 1099511628211
+                }
+                let isFinder = (row < 5 && column < 5) || (row < 5 && column >= count - 5) || (row >= count - 5 && column < 5)
+                let active = isFinder
+                    ? ((row % 4 == 0 || column % 4 == 0) || (row % 4 >= 1 && row % 4 <= 2 && column % 4 >= 1 && column % 4 <= 2))
+                    : ((value & 3) != 0)
+                guard active else { continue }
+                let frame = CGRect(
+                    x: origin.x + CGFloat(column) * cell + 0.6,
+                    y: origin.y + CGFloat(row) * cell + 0.6,
+                    width: max(1, cell - 1.2),
+                    height: max(1, cell - 1.2)
+                )
+                UIColor.white.withAlphaComponent(0.84).setFill()
+                UIBezierPath(roundedRect: frame, cornerRadius: 0.8).fill()
+            }
+        }
+    }
+}
+
 private final class Biogram3DProfileCardView: UIView {
     private let cardContainer = UIView()
     private let front = UIView()
@@ -878,6 +940,9 @@ private final class Biogram3DProfileCardView: UIView {
     private let backFrost = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
     private let backSheen = CAGradientLayer()
     private let backCipherLabel = UILabel()
+    private let backMagneticStrip = UIView()
+    private let backHashPatternView = BiogramCardHashPatternView()
+    private let backHashLabel = UILabel()
     private let brandLabel = UILabel()
     private let editionLabel = UILabel()
     private let chipView = UIView()
@@ -917,7 +982,8 @@ private final class Biogram3DProfileCardView: UIView {
             face.layer.isDoubleSided = false
             self.cardContainer.addSubview(face)
         }
-        self.back.layer.transform = CATransform3DMakeRotation(.pi, 0.0, 1.0, 0.0)
+        self.back.layer.transform = CATransform3DIdentity
+        self.back.isHidden = true
 
         self.frontGradient.startPoint = CGPoint(x: 0.0, y: 0.0)
         self.frontGradient.endPoint = CGPoint(x: 1.0, y: 1.0)
@@ -1006,6 +1072,11 @@ private final class Biogram3DProfileCardView: UIView {
         self.backTitleLabel.textColor = UIColor.white.withAlphaComponent(0.74)
         self.back.addSubview(self.backTitleLabel)
 
+        self.backMagneticStrip.backgroundColor = UIColor.black.withAlphaComponent(0.38)
+        self.backMagneticStrip.layer.borderWidth = 0.5
+        self.backMagneticStrip.layer.borderColor = UIColor.white.withAlphaComponent(0.12).cgColor
+        self.back.addSubview(self.backMagneticStrip)
+
         self.backHandleLabel.font = UIFont.systemFont(ofSize: 17, weight: .semibold)
         self.backHandleLabel.textColor = .white
         self.backHandleLabel.adjustsFontSizeToFitWidth = true
@@ -1022,6 +1093,16 @@ private final class Biogram3DProfileCardView: UIView {
         self.backCipherLabel.minimumScaleFactor = 0.7
         self.back.addSubview(self.backCipherLabel)
 
+        self.backHashPatternView.translatesAutoresizingMaskIntoConstraints = false
+        self.back.addSubview(self.backHashPatternView)
+
+        self.backHashLabel.font = UIFont.monospacedSystemFont(ofSize: 6.5, weight: .semibold)
+        self.backHashLabel.textColor = UIColor.white.withAlphaComponent(0.72)
+        self.backHashLabel.textAlignment = .center
+        self.backHashLabel.adjustsFontSizeToFitWidth = true
+        self.backHashLabel.minimumScaleFactor = 0.7
+        self.back.addSubview(self.backHashLabel)
+
         self.backSignatureLabel.font = UIFont.monospacedSystemFont(ofSize: 12, weight: .semibold)
         self.backSignatureLabel.textColor = biogramCardColor("#E8D9C4")
         self.back.addSubview(self.backSignatureLabel)
@@ -1036,7 +1117,8 @@ private final class Biogram3DProfileCardView: UIView {
         for view in [
             self.brandLabel, self.editionLabel, self.chipView, self.nameLabel,
             self.handleLabel, self.frontSignatureLabel, self.backTitleLabel,
-            self.backHandleLabel, self.backIdLabel, self.backCipherLabel, self.backSignatureLabel, self.backFooterLabel
+            self.backHandleLabel, self.backIdLabel, self.backCipherLabel, self.backHashLabel,
+            self.backSignatureLabel, self.backFooterLabel
         ] {
             view.translatesAutoresizingMaskIntoConstraints = false
         }
@@ -1063,19 +1145,34 @@ private final class Biogram3DProfileCardView: UIView {
             self.frontSignatureLabel.trailingAnchor.constraint(equalTo: self.front.trailingAnchor, constant: -22),
             self.frontSignatureLabel.bottomAnchor.constraint(equalTo: self.front.bottomAnchor, constant: -18),
 
-            self.backTitleLabel.topAnchor.constraint(equalTo: self.back.topAnchor, constant: 23),
+            self.backTitleLabel.topAnchor.constraint(equalTo: self.back.topAnchor, constant: 20),
             self.backTitleLabel.leadingAnchor.constraint(equalTo: self.back.leadingAnchor, constant: 22),
             self.backTitleLabel.trailingAnchor.constraint(equalTo: self.back.trailingAnchor, constant: -22),
-            self.backHandleLabel.topAnchor.constraint(equalTo: self.backTitleLabel.bottomAnchor, constant: 25),
+            self.backMagneticStrip.topAnchor.constraint(equalTo: self.backTitleLabel.bottomAnchor, constant: 13),
+            self.backMagneticStrip.leadingAnchor.constraint(equalTo: self.back.leadingAnchor),
+            self.backMagneticStrip.trailingAnchor.constraint(equalTo: self.back.trailingAnchor),
+            self.backMagneticStrip.heightAnchor.constraint(equalToConstant: 22),
+
+            self.backHandleLabel.topAnchor.constraint(equalTo: self.backMagneticStrip.bottomAnchor, constant: 10),
             self.backHandleLabel.leadingAnchor.constraint(equalTo: self.back.leadingAnchor, constant: 22),
-            self.backHandleLabel.trailingAnchor.constraint(equalTo: self.back.trailingAnchor, constant: -22),
-            self.backIdLabel.topAnchor.constraint(equalTo: self.backHandleLabel.bottomAnchor, constant: 8),
+            self.backHandleLabel.trailingAnchor.constraint(equalTo: self.backHashPatternView.leadingAnchor, constant: -10),
+            self.backIdLabel.topAnchor.constraint(equalTo: self.backHandleLabel.bottomAnchor, constant: 6),
             self.backIdLabel.leadingAnchor.constraint(equalTo: self.back.leadingAnchor, constant: 22),
-            self.backIdLabel.trailingAnchor.constraint(equalTo: self.back.trailingAnchor, constant: -22),
-            self.backCipherLabel.topAnchor.constraint(equalTo: self.backIdLabel.bottomAnchor, constant: 14),
+            self.backIdLabel.trailingAnchor.constraint(equalTo: self.backHashPatternView.leadingAnchor, constant: -10),
+            self.backCipherLabel.topAnchor.constraint(equalTo: self.backIdLabel.bottomAnchor, constant: 10),
             self.backCipherLabel.leadingAnchor.constraint(equalTo: self.back.leadingAnchor, constant: 22),
-            self.backCipherLabel.trailingAnchor.constraint(equalTo: self.back.trailingAnchor, constant: -22),
+            self.backCipherLabel.trailingAnchor.constraint(equalTo: self.backHashPatternView.leadingAnchor, constant: -10),
+            self.backHashPatternView.topAnchor.constraint(equalTo: self.backMagneticStrip.bottomAnchor, constant: 10),
+            self.backHashPatternView.trailingAnchor.constraint(equalTo: self.back.trailingAnchor, constant: -22),
+            self.backHashPatternView.widthAnchor.constraint(equalToConstant: 64),
+            self.backHashPatternView.heightAnchor.constraint(equalToConstant: 64),
+            self.backHashLabel.topAnchor.constraint(equalTo: self.backHashPatternView.bottomAnchor, constant: 3),
+            self.backHashLabel.centerXAnchor.constraint(equalTo: self.backHashPatternView.centerXAnchor),
+            self.backHashLabel.widthAnchor.constraint(equalTo: self.backHashPatternView.widthAnchor),
+            self.backHashLabel.heightAnchor.constraint(equalToConstant: 10),
+
             self.backSignatureLabel.leadingAnchor.constraint(equalTo: self.back.leadingAnchor, constant: 22),
+            self.backSignatureLabel.trailingAnchor.constraint(equalTo: self.backHashPatternView.leadingAnchor, constant: -10),
             self.backSignatureLabel.trailingAnchor.constraint(equalTo: self.back.trailingAnchor, constant: -22),
             self.backSignatureLabel.bottomAnchor.constraint(equalTo: self.backFooterLabel.topAnchor, constant: -17),
             self.backFooterLabel.leadingAnchor.constraint(equalTo: self.back.leadingAnchor, constant: 22),
@@ -1143,6 +1240,8 @@ private final class Biogram3DProfileCardView: UIView {
         }
         let remainingAliasCount = max(0, additionalAliases.count - visibleAliases.count)
         let aliasSuffix = remainingAliasCount > 0 ? "  +\(remainingAliasCount)" : ""
+        self.backHashPatternView.seed = userId
+        self.backHashLabel.text = "HASH / " + String(biogramCardVisualHash(userId).replacingOccurrences(of: " ", with: "").prefix(12))
         self.backTitleLabel.text = "BIOGRAM / PROFILE DETAILS"
         self.backHandleLabel.text = visibleAliases.isEmpty
             ? (self.handleLabel.text ?? self.userHandle)
@@ -1195,10 +1294,21 @@ private final class Biogram3DProfileCardView: UIView {
     }
 
     @objc private func flip() {
-        self.showingBack.toggle()
+        let showBack = !self.showingBack
+        self.showingBack = showBack
         self.tiltX = 0
         self.tiltY = 0
         self.applyTransform(animated: true)
+
+        UIView.transition(
+            with: self.cardContainer,
+            duration: 0.58,
+            options: [.transitionFlipFromRight, .showHideTransitionViews, .allowUserInteraction, .beginFromCurrentState],
+            animations: {
+                self.front.isHidden = showBack
+                self.back.isHidden = !showBack
+            }
+        )
     }
 
     @objc private func handlePan(_ gesture: UIPanGestureRecognizer) {
@@ -1222,7 +1332,7 @@ private final class Biogram3DProfileCardView: UIView {
     private func applyTransform(animated: Bool) {
         var transform = CATransform3DIdentity
         transform.m34 = -1.0 / 720.0
-        transform = CATransform3DRotate(transform, (self.showingBack ? CGFloat.pi : 0.0) + self.tiltY, 0.0, 1.0, 0.0)
+        transform = CATransform3DRotate(transform, self.tiltY, 0.0, 1.0, 0.0)
         transform = CATransform3DRotate(transform, self.tiltX, 1.0, 0.0, 0.0)
         let changes = {
             self.cardContainer.layer.transform = transform
@@ -1232,6 +1342,32 @@ private final class Biogram3DProfileCardView: UIView {
         } else {
             changes()
         }
+    }
+}
+
+/// Renders the exact front-face card used in the studio as a compact profile-row thumbnail.
+public func biogramProfileCardThumbnail(
+    style: BiogramProfileCardStyle,
+    image: UIImage?,
+    displayName: String,
+    username: String,
+    userId: String
+) -> UIImage {
+    let size = CGSize(width: 260, height: 164)
+    let card = Biogram3DProfileCardView(frame: CGRect(origin: .zero, size: size))
+    card.configure(
+        style: style,
+        image: image,
+        displayName: displayName,
+        username: username,
+        userId: userId
+    )
+    card.setNeedsLayout()
+    card.layoutIfNeeded()
+
+    let renderer = UIGraphicsImageRenderer(size: size)
+    return renderer.image { context in
+        card.layer.render(in: context.cgContext)
     }
 }
 
@@ -1499,13 +1635,19 @@ private final class BiogramProfileCardViewerController: ViewController {
 
     override func loadDisplayNode() {
         self.displayNode = ASDisplayNode()
-        self.displayNode.backgroundColor = biogramCardColor("#08090B")
+        self.displayNode.backgroundColor = .clear
 
         let root = self.displayNode.view
-        root.backgroundColor = biogramCardColor("#08090B")
+        root.backgroundColor = .clear
+        root.isOpaque = false
+
+        let dimView = UIView()
+        dimView.backgroundColor = UIColor.black.withAlphaComponent(0.62)
+        dimView.translatesAutoresizingMaskIntoConstraints = false
+        root.addSubview(dimView)
 
         let backgroundBlur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
-        backgroundBlur.alpha = 0.48
+        backgroundBlur.alpha = 0.62
         backgroundBlur.isUserInteractionEnabled = false
         backgroundBlur.translatesAutoresizingMaskIntoConstraints = false
         root.addSubview(backgroundBlur)
@@ -1569,11 +1711,17 @@ private final class BiogramProfileCardViewerController: ViewController {
         stack.addArrangedSubview(hint)
 
         NSLayoutConstraint.activate([
+            dimView.topAnchor.constraint(equalTo: root.topAnchor),
+            dimView.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            dimView.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+            dimView.bottomAnchor.constraint(equalTo: root.bottomAnchor),
             backgroundBlur.topAnchor.constraint(equalTo: root.topAnchor),
             backgroundBlur.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             backgroundBlur.trailingAnchor.constraint(equalTo: root.trailingAnchor),
             backgroundBlur.bottomAnchor.constraint(equalTo: root.bottomAnchor),
-            stack.topAnchor.constraint(equalTo: root.safeAreaLayoutGuide.topAnchor, constant: 20),
+            stack.centerYAnchor.constraint(equalTo: root.centerYAnchor),
+            stack.topAnchor.constraint(greaterThanOrEqualTo: root.safeAreaLayoutGuide.topAnchor, constant: 16),
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: root.safeAreaLayoutGuide.bottomAnchor, constant: -16),
             stack.leadingAnchor.constraint(equalTo: root.safeAreaLayoutGuide.leadingAnchor, constant: 20),
             stack.trailingAnchor.constraint(equalTo: root.safeAreaLayoutGuide.trailingAnchor, constant: -20),
             stack.centerYAnchor.constraint(lessThanOrEqualTo: root.safeAreaLayoutGuide.centerYAnchor),
