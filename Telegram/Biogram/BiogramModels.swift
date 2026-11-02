@@ -37,7 +37,7 @@ public struct BiogramVirtualNumber: Codable, Equatable {
     public var label: String?
     public var number: String
     public var createdAt: Date
-    /// Public virtual numbers are synchronized only when the owner enables this flag.
+    /// `false` keeps a number private. `nil` is the legacy/default public state.
     public var isPublic: Bool?
 
     public init(
