@@ -115,7 +115,8 @@ private final class BiogramProfilePatternOverlayView: UIView {
         let symbols: [String]
         switch self.pattern {
         case "skulls":
-            symbols = ["☠", "☠", "·"]
+            // Force Unicode text presentation (U+FE0E): a monochrome text glyph, never an emoji sticker.
+            symbols = ["\u{2620}\u{FE0E}", "\u{2620}\u{FE0E}", "·"]
         case "pentagrams":
             symbols = ["⛤", "✶", "⛤"]
         case "stars":
