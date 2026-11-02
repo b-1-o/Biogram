@@ -118,15 +118,15 @@ private final class BiogramProfilePatternOverlayView: UIView {
             // Force Unicode text presentation (U+FE0E): a monochrome text glyph, never an emoji sticker.
             symbols = ["\u{2620}\u{FE0E}", "\u{2620}\u{FE0E}", "·"]
         case "pentagrams":
-            symbols = ["⛤", "✶", "⛤"]
+            symbols = ["⛤︎", "✶︎", "⛤︎"]
         case "stars":
-            symbols = ["✦", "✧", "★", "✦"]
+            symbols = ["✦︎", "✧︎", "★︎", "✦︎"]
         case "crosses":
-            symbols = ["✛", "✚", "†"]
+            symbols = ["✛︎", "✚︎", "†"]
         case "snowflakes":
-            symbols = ["❄", "❅", "❆"]
+            symbols = ["❄︎", "❅︎", "❆︎"]
         case "frost":
-            symbols = ["❆", "✧", "❅", "❄"]
+            symbols = ["❆︎", "✧︎", "❅︎", "❄︎"]
         default:
             return
         }
