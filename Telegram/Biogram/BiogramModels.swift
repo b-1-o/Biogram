@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 public struct BiogramCollectible: Codable, Equatable {
     public let id: String
@@ -36,17 +37,21 @@ public struct BiogramVirtualNumber: Codable, Equatable {
     public var label: String?
     public var number: String
     public var createdAt: Date
+    /// Deprecated compatibility field. All Biogram decorative numbers are public in Biogram profiles.
+    public var isPublic: Bool?
 
     public init(
         id: String = UUID().uuidString,
         label: String? = nil,
         number: String,
-        createdAt: Date = Date()
+        createdAt: Date = Date(),
+        isPublic: Bool? = nil
     ) {
         self.id = id
         self.label = label
         self.number = number
         self.createdAt = createdAt
+        self.isPublic = isPublic
     }
 }
 
@@ -102,6 +107,33 @@ public struct BiogramProfileColor: Codable, Equatable {
     ]
 }
 
+/// Appearance for a locally designed, two-sided Biogram profile card.
+public struct BiogramProfileCardStyle: Codable, Equatable {
+    /// One of the existing Biogram palette names.
+    public var paletteName: String
+    /// "matte", "glossy", or "metallic".
+    public var material: String
+    /// Local filename for optional front artwork. This is not an activation key.
+    public var imageFilename: String?
+
+    public init(
+        paletteName: String = "Dark Red",
+        material: String = "glossy",
+        imageFilename: String? = nil
+    ) {
+        let paletteNames = BiogramProfileColor.presets.map { $0.0 }
+        self.paletteName = paletteNames.contains(paletteName) ? paletteName : "Dark Red"
+        self.material = ["matte", "glossy", "metallic"].contains(material) ? material : "glossy"
+        self.imageFilename = imageFilename
+    }
+
+    public static let materials: [(String, String)] = [
+        ("Matte", "matte"),
+        ("Glossy", "glossy"),
+        ("Metallic", "metallic")
+    ]
+}
+
 public struct BiogramCustomizations: Codable, Equatable {
     public var localPremiumEnabled: Bool
     public var showPremiumBadge: Bool
@@ -109,6 +141,7 @@ public struct BiogramCustomizations: Codable, Equatable {
     public var localAliases: [String]
     public var profileColor: BiogramProfileColor?
     public var profileColorEnabled: Bool
+    public var profileCardStyle: BiogramProfileCardStyle?
 
     public init(
         localPremiumEnabled: Bool = false,
@@ -116,7 +149,8 @@ public struct BiogramCustomizations: Codable, Equatable {
         badgeStyle: String? = "stars",
         localAliases: [String] = [],
         profileColor: BiogramProfileColor? = nil,
-        profileColorEnabled: Bool = false
+        profileColorEnabled: Bool = false,
+        profileCardStyle: BiogramProfileCardStyle? = nil
     ) {
         self.localPremiumEnabled = localPremiumEnabled
         self.showPremiumBadge = showPremiumBadge
@@ -124,6 +158,7 @@ public struct BiogramCustomizations: Codable, Equatable {
         self.localAliases = localAliases
         self.profileColor = profileColor
         self.profileColorEnabled = profileColorEnabled
+        self.profileCardStyle = profileCardStyle
     }
 }
 
@@ -164,5 +199,104 @@ public struct BiogramBanner: Codable, Equatable {
         self.localFilename = localFilename
         self.aspectRatio = aspectRatio
         self.createdAt = createdAt
+    }
+}
+
+
+public struct BiogramCloudPublicProfile: Codable, Equatable {
+    public let telegramId: String
+    public let username: String?
+    public let displayName: String
+    public let profileColorEnabled: Bool
+    public let profileColor: BiogramProfileColor?
+    public let cardStyle: BiogramProfileCardStyle
+    public let aliases: [String]
+    public let publicNumbers: [BiogramCloudPublicNumber]
+    public let cardImageBase64: String?
+    public let bannerImageBase64: String?
+    public let publicEnabled: Bool
+    public let updatedAt: Int64
+
+    public init(
+        telegramId: String,
+        username: String?,
+        displayName: String,
+        profileColorEnabled: Bool,
+        profileColor: BiogramProfileColor?,
+        cardStyle: BiogramProfileCardStyle,
+        aliases: [String],
+        publicNumbers: [BiogramCloudPublicNumber],
+        cardImageBase64: String? = nil,
+        bannerImageBase64: String? = nil,
+        publicEnabled: Bool = true,
+        updatedAt: Int64 = 0
+    ) {
+        self.telegramId = telegramId
+        self.username = username
+        self.displayName = displayName
+        self.profileColorEnabled = profileColorEnabled
+        self.profileColor = profileColor
+        self.cardStyle = cardStyle
+        self.aliases = aliases
+        self.publicNumbers = publicNumbers
+        self.cardImageBase64 = cardImageBase64
+        self.bannerImageBase64 = bannerImageBase64
+        self.publicEnabled = publicEnabled
+        self.updatedAt = updatedAt
+    }
+
+    public var cardImage: UIImage? {
+        guard let cardImageBase64,
+              let data = Data(base64Encoded: cardImageBase64) else {
+            return nil
+        }
+        return UIImage(data: data)
+    }
+
+    public var bannerImage: UIImage? {
+        guard let bannerImageBase64,
+              let data = Data(base64Encoded: bannerImageBase64) else {
+            return nil
+        }
+        return UIImage(data: data)
+    }
+}
+
+public struct BiogramCloudPublicNumber: Codable, Equatable {
+    public let id: String
+    public let label: String?
+    public let number: String
+    public let isPublic: Bool
+
+    public init(id: String, label: String?, number: String, isPublic: Bool = true) {
+        self.id = id
+        self.label = label
+        self.number = number
+        self.isPublic = isPublic
+    }
+}
+
+public struct BiogramCloudProfilePayload: Encodable {
+    public let profileColorEnabled: Bool
+    public let profileColor: BiogramProfileColor?
+    public let cardStyle: BiogramProfileCardStyle
+    public let aliases: [String]
+    public let publicNumbers: [BiogramCloudPublicNumber]
+    public let publicEnabled: Bool
+
+    public init(
+        profileColorEnabled: Bool,
+        profileColor: BiogramProfileColor?,
+        cardStyle: BiogramProfileCardStyle,
+        aliases: [String],
+        publicNumbers: [BiogramCloudPublicNumber],
+        publicEnabled: Bool = true
+    ) {
+        self.profileColorEnabled = profileColorEnabled
+        self.profileColor = profileColor
+        self.cardStyle = cardStyle
+        self.aliases = aliases
+        self.publicNumbers = publicNumbers
+        self.publicEnabled = publicEnabled
     }
 }

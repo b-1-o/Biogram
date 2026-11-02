@@ -456,6 +456,7 @@ plist_fragment(
             <array>
                 <string>tg</string>
                 <string>tonsite</string>
+                <string>biogram</string>
             </array>
         </dict>
         <dict>
@@ -1753,11 +1754,11 @@ plist_fragment(
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleDisplayName</key>
-    <string>Swiftgram</string>
+    <string>Biogram</string>
     <key>CFBundleIdentifier</key>
     <string>{telegram_bundle_id}</string>
     <key>CFBundleName</key>
-    <string>Swiftgram</string>
+    <string>Biogram</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleSignature</key>
@@ -1968,6 +1969,9 @@ ios_application(
     ],
     resources = [
         ":LaunchScreen",
+        # Make the same Biogram mark used by the app icon available to the
+        # authorization intro screen as a normal image resource.
+        "Telegram-iOS/Swiftgram.icon/Assets/Biogram.png",
         #":DefaultAppIcon",
     ],
     frameworks = [

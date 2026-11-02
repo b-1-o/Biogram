@@ -106,6 +106,7 @@ typedef enum {
     
     UIView *_wrapperView;
     UIView *_startButton;
+    UIImageView *_biogramLogoView;
     
     bool _loadedView;
 }
@@ -230,8 +231,9 @@ typedef enum {
 }
 
 - (void)animateIn {
-    CGPoint logoTargetPosition = _glkView.center;
-    _glkView.center = CGPointMake(self.view.bounds.size.width / 2.0, self.view.bounds.size.height / 2.0);
+    UIView *logoView = _biogramLogoView != nil ? (UIView *)_biogramLogoView : (UIView *)_glkView;
+    CGPoint logoTargetPosition = logoView.center;
+    logoView.center = CGPointMake(self.view.bounds.size.width / 2.0, self.view.bounds.size.height / 2.0);
     
     RMIntroPageView *firstPage = (RMIntroPageView *)[_pageViews firstObject];
     CGPoint headerTargetPosition = firstPage.headerLabel.center;
@@ -246,24 +248,24 @@ typedef enum {
     CGPoint buttonTargetPosition = _startButton.center;
     _startButton.center = CGPointMake(buttonTargetPosition.x, buttonTargetPosition.y + 220.0);
     
-    _glkView.transform = CGAffineTransformMakeScale(0.66, 0.66);
+    logoView.transform = CGAffineTransformMakeScale(0.66, 0.66);
         
     [UIView animateWithDuration:0.65 delay:0.15 usingSpringWithDamping:1.2f initialSpringVelocity:0.0 options:kNilOptions animations:^{
-        _glkView.center = logoTargetPosition;
+        logoView.center = logoTargetPosition;
         firstPage.headerLabel.center = headerTargetPosition;
         firstPage.descriptionLabel.center = descriptionTargetPosition;
         _pageControl.center = pageControlTargetPosition;
         _startButton.center = buttonTargetPosition;
-        _glkView.transform = CGAffineTransformIdentity;
+        logoView.transform = CGAffineTransformIdentity;
     } completion:nil];
     
-    _glkView.alpha = 0.0;
+    logoView.alpha = 0.0;
     _pageScrollView.alpha = 0.0;
     _pageControl.alpha = 0.0;
     _startButton.alpha = 0.0;
     
     [UIView animateWithDuration:0.3 delay:0.15 options:kNilOptions animations:^{
-        _glkView.alpha = 1.0;
+        logoView.alpha = 1.0;
         _pageScrollView.alpha = 1.0;
         _pageControl.alpha = 1.0;
         _startButton.alpha = 1.0;
@@ -273,15 +275,32 @@ typedef enum {
 - (void)loadGL
 {
 #if TARGET_OS_SIMULATOR && defined(__aarch64__)
+    // The Biogram mark is a static image, so the intro does not need OpenGL on this target.
+    NSString *logoPath = [[NSBundle mainBundle] pathForResource:@"Biogram" ofType:@"png"];
+        if (logoPath == nil) {
+            logoPath = [[NSBundle mainBundle] pathForResource:@"Biogram" ofType:@"png" inDirectory:@"Swiftgram.icon/Assets"];
+        }
+    UIImage *logoImage = logoPath != nil ? [UIImage imageWithContentsOfFile:logoPath] : nil;
+    if (logoImage != nil && !_isOpenGLLoaded) {
+        CGFloat size = 200.0;
+        if ([UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPad) {
+            size *= 1.2;
+        }
+        CGFloat height = [UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPad ? 119.0 : 50.0;
+        _biogramLogoView = [[UIImageView alloc] initWithImage:logoImage];
+        _biogramLogoView.frame = CGRectMake((self.view.bounds.size.width - size) / 2.0, height, size, size);
+        _biogramLogoView.contentMode = UIViewContentModeScaleAspectFit;
+        _biogramLogoView.backgroundColor = UIColor.clearColor;
+        _biogramLogoView.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin;
+        _biogramLogoView.userInteractionEnabled = false;
+        [self.view addSubview:_biogramLogoView];
+        _isOpenGLLoaded = true;
+    }
     return;
 #endif
     
     if (/*[[UIApplication sharedApplication] applicationState] != UIApplicationStateBackground*/true && !_isOpenGLLoaded)
     {
-        _context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES2];
-        if (!_context)
-            NSLog(@"Failed to create ES context");
-        
         bool isIpad = ([UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPad);
         
         CGFloat size = 200;
@@ -291,6 +310,27 @@ typedef enum {
         int height = 50;
         if (isIpad)
             height += 138 / 2;
+
+        NSString *logoPath = [[NSBundle mainBundle] pathForResource:@"Biogram" ofType:@"png"];
+        if (logoPath == nil) {
+            logoPath = [[NSBundle mainBundle] pathForResource:@"Biogram" ofType:@"png" inDirectory:@"Swiftgram.icon/Assets"];
+        }
+        UIImage *logoImage = logoPath != nil ? [UIImage imageWithContentsOfFile:logoPath] : nil;
+        if (logoImage != nil) {
+            _biogramLogoView = [[UIImageView alloc] initWithImage:logoImage];
+            _biogramLogoView.frame = CGRectMake(self.view.bounds.size.width / 2.0 - size / 2.0, height, size, size);
+            _biogramLogoView.contentMode = UIViewContentModeScaleAspectFit;
+            _biogramLogoView.backgroundColor = UIColor.clearColor;
+            _biogramLogoView.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin;
+            _biogramLogoView.userInteractionEnabled = false;
+            [self.view addSubview:_biogramLogoView];
+            _isOpenGLLoaded = true;
+            return;
+        }
+
+        _context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES2];
+        if (!_context)
+            NSLog(@"Failed to create ES context");
         
         _glkView = [[GLKView alloc] initWithFrame:CGRectMake(self.view.bounds.size.width / 2 - size / 2, height, size, size) context:_context];
         _glkView.backgroundColor = _backgroundColor;
@@ -322,6 +362,8 @@ typedef enum {
     _context = nil;
     [_glkView removeFromSuperview];
     _glkView = nil;
+    [_biogramLogoView removeFromSuperview];
+    _biogramLogoView = nil;
     _isOpenGLLoaded = false;
 }
 
@@ -352,12 +394,15 @@ typedef enum {
     [self loadGL];
     
     _wrapperView = [[UIScrollView alloc]initWithFrame:self.view.bounds];
+    _wrapperView.backgroundColor = UIColor.clearColor;
+    _wrapperView.opaque = false;
     [self.view addSubview:_wrapperView];
     
     _pageScrollView = [[UIScrollView alloc]initWithFrame:self.view.bounds];
+    _pageScrollView.backgroundColor = UIColor.clearColor;
     _pageScrollView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
     _pageScrollView.clipsToBounds = true;
-    _pageScrollView.opaque = true;
+    _pageScrollView.opaque = false;
     _pageScrollView.clearsContextBeforeDrawing = false;
     [_pageScrollView setShowsHorizontalScrollIndicator:false];
     [_pageScrollView setShowsVerticalScrollIndicator:false];
@@ -371,7 +416,8 @@ typedef enum {
     for (NSUInteger i = 0; i < _headlines.count; i++)
     {
         RMIntroPageView *p = [[RMIntroPageView alloc]initWithFrame:CGRectMake(i * self.view.bounds.size.width, 0, self.view.bounds.size.width, 0) headline:[_headlines objectAtIndex:i] description:[_descriptions objectAtIndex:i] color:_primaryColor];
-        p.opaque = true;
+        p.backgroundColor = UIColor.clearColor;
+        p.opaque = false;
         p.clearsContextBeforeDrawing = false;
         [_pageViews addObject:p];
         [_pageScrollView addSubview:p];
@@ -387,9 +433,15 @@ typedef enum {
     _pageControl.pageIndicatorTintColor = _regularDotColor;
     _pageControl.currentPageIndicatorTintColor = _highlightedDotColor;
     [_wrapperView addSubview:_pageControl];
+
 }
 
 - (UIView *)createAnimationSnapshot {
+    if (_biogramLogoView != nil) {
+        UIView *snapshot = [_biogramLogoView snapshotViewAfterScreenUpdates:false];
+        snapshot.frame = _biogramLogoView.frame;
+        return snapshot;
+    }
     UIImage *image = _glkView.snapshot;
     UIImageView *imageView = [[UIImageView alloc] initWithFrame:_glkView.frame];
     imageView.image = image;
@@ -550,7 +602,8 @@ typedef enum {
     }
     
     _pageControl.frame = CGRectMake(0, pageControlY, self.view.bounds.size.width, 7);
-    _glkView.frame = CGRectChangedOriginY(_glkView.frame, glViewY - statusBarHeight);
+    UIView *logoView = _biogramLogoView != nil ? (UIView *)_biogramLogoView : (UIView *)_glkView;
+    logoView.frame = CGRectChangedOriginY(logoView.frame, glViewY - statusBarHeight);
     
     CGFloat startButtonWidth = MIN(430.0 - 48.0, self.view.bounds.size.width - 48.0f);
     UIView *startButton = self.createStartButton(startButtonWidth);

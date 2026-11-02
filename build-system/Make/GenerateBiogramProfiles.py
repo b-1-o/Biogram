@@ -2,6 +2,7 @@ import os
 import plistlib
 import subprocess
 import tempfile
+from datetime import datetime, timedelta, timezone
 
 
 SOURCE = "build-system/fake-codesigning/profiles"
@@ -9,6 +10,7 @@ DEST = "build-system/fake-codesigning/profiles"
 
 TEAM_ID = "FAKE123456"
 BUNDLE_ID = "org.28d7790dd5d2e37c.Swiftgram"
+FAKE_PROFILE_VALIDITY_DAYS = 365
 
 PROFILE_MAPPING = {
     "Telegram.mobileprovision": "",
@@ -65,7 +67,7 @@ def process_profile(filename, suffix):
     entitlements["application-identifier"] = app_id
     entitlements["com.apple.developer.team-identifier"] = TEAM_ID
 
-    # application groups, if present — rewrite to match new bundle id
+    # Application groups, if present — rewrite to match the new bundle ID.
     if "com.apple.security.application-groups" in entitlements:
         groups = entitlements["com.apple.security.application-groups"]
         if isinstance(groups, list):
@@ -84,9 +86,21 @@ def process_profile(filename, suffix):
     profile["TeamName"] = "Fake Team"
     profile.pop("DER-Encoded-Profile", None)
 
+    # These profiles are deliberately self-signed build-time profiles, not
+    # Apple-issued distribution profiles. Refresh their validity on every run
+    # instead of inheriting the expiration date from the old template files.
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    expiration_date = now + timedelta(days=FAKE_PROFILE_VALIDITY_DAYS)
+    profile["CreationDate"] = now
+    profile["ExpirationDate"] = expiration_date
+
+    if profile["ExpirationDate"] <= now:
+        raise RuntimeError("Generated provisioning profile is already expired: {}".format(filename))
+
     encode_profile(profile, output)
 
     print("  application-identifier:", app_id)
+    print("  expires:", expiration_date.isoformat() + "Z")
     if "aps-environment" in entitlements:
         print("  aps-environment:", entitlements["aps-environment"])
 
@@ -99,6 +113,7 @@ def main():
     print("Generating Biogram fake provisioning profiles")
     print("TEAM_ID:", TEAM_ID)
     print("BUNDLE_ID:", BUNDLE_ID)
+    print("Validity:", FAKE_PROFILE_VALIDITY_DAYS, "days from this build")
     print("========================================")
 
     for filename, suffix in PROFILE_MAPPING.items():
